@@ -11,43 +11,43 @@ msgstr ""
 "Language: ja\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: lib/gantt_ex/i18n.ex:240
+#: lib/gantt_ex/i18n.ex:245
 #, elixir-autogen, elixir-format
 msgid "%{count} day"
 msgid_plural "%{count} days"
 msgstr[0] "%{count}日"
 
-#: lib/gantt_ex/i18n.ex:239
+#: lib/gantt_ex/i18n.ex:244
 #, elixir-autogen, elixir-format
 msgid "%{count} hour"
 msgid_plural "%{count} hours"
 msgstr[0] "%{count}時間"
 
-#: lib/gantt_ex/i18n.ex:238
+#: lib/gantt_ex/i18n.ex:243
 #, elixir-autogen, elixir-format
 msgid "%{count} minute"
 msgid_plural "%{count} minutes"
 msgstr[0] "%{count}分"
 
-#: lib/gantt_ex/i18n.ex:242
+#: lib/gantt_ex/i18n.ex:247
 #, elixir-autogen, elixir-format
 msgid "%{count} month"
 msgid_plural "%{count} months"
 msgstr[0] "%{count}か月"
 
-#: lib/gantt_ex/i18n.ex:243
+#: lib/gantt_ex/i18n.ex:248
 #, elixir-autogen, elixir-format
 msgid "%{count} quarter"
 msgid_plural "%{count} quarters"
 msgstr[0] "%{count}四半期"
 
-#: lib/gantt_ex/i18n.ex:241
+#: lib/gantt_ex/i18n.ex:246
 #, elixir-autogen, elixir-format
 msgid "%{count} week"
 msgid_plural "%{count} weeks"
 msgstr[0] "%{count}週間"
 
-#: lib/gantt_ex/i18n.ex:244
+#: lib/gantt_ex/i18n.ex:249
 #, elixir-autogen, elixir-format
 msgid "%{count} year"
 msgid_plural "%{count} years"
@@ -63,12 +63,12 @@ msgstr "サブタスクを追加"
 msgid "Add task"
 msgstr "タスクを追加"
 
-#: lib/gantt_ex/i18n.ex:170
+#: lib/gantt_ex/i18n.ex:175
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to delete this dependency?"
 msgstr "この依存関係を削除してもよろしいですか？"
 
-#: lib/gantt_ex/i18n.ex:168
+#: lib/gantt_ex/i18n.ex:173
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to delete this task?"
 msgstr "このタスクを削除してもよろしいですか？"
@@ -88,12 +88,12 @@ msgstr "閉じる"
 msgid "Collapse"
 msgstr "折りたたむ"
 
-#: lib/gantt_ex/i18n.ex:181
+#: lib/gantt_ex/i18n.ex:186
 #, elixir-autogen, elixir-format
 msgid "Collapse all"
 msgstr "すべて折りたたむ"
 
-#: lib/gantt_ex/i18n.ex:187
+#: lib/gantt_ex/i18n.ex:192
 #, elixir-autogen, elixir-format
 msgid "Days"
 msgstr "日"
@@ -143,12 +143,12 @@ msgstr "終了日"
 msgid "Expand"
 msgstr "展開"
 
-#: lib/gantt_ex/i18n.ex:180
+#: lib/gantt_ex/i18n.ex:185
 #, elixir-autogen, elixir-format
 msgid "Expand all"
 msgstr "すべて展開"
 
-#: lib/gantt_ex/i18n.ex:183
+#: lib/gantt_ex/i18n.ex:188
 #, elixir-autogen, elixir-format
 msgid "Export"
 msgstr "エクスポート"
@@ -163,22 +163,22 @@ msgstr "終了-終了"
 msgid "Finish to start"
 msgstr "終了-開始"
 
-#: lib/gantt_ex/i18n.ex:182
+#: lib/gantt_ex/i18n.ex:187
 #, elixir-autogen, elixir-format
 msgid "Fullscreen"
 msgstr "全画面表示"
 
-#: lib/gantt_ex/i18n.ex:199
+#: lib/gantt_ex/i18n.ex:204
 #, elixir-autogen, elixir-format
 msgid "Gantt chart"
 msgstr "ガントチャート"
 
-#: lib/gantt_ex/i18n.ex:186
+#: lib/gantt_ex/i18n.ex:191
 #, elixir-autogen, elixir-format
 msgid "Hours"
 msgstr "時間"
 
-#: lib/gantt_ex/i18n.ex:169
+#: lib/gantt_ex/i18n.ex:174
 #, elixir-autogen, elixir-format
 msgid "Its subtasks will be deleted too."
 msgstr "サブタスクも削除されます。"
@@ -193,7 +193,7 @@ msgstr "ラグ"
 msgid "Milestone"
 msgstr "マイルストーン"
 
-#: lib/gantt_ex/i18n.ex:189
+#: lib/gantt_ex/i18n.ex:194
 #, elixir-autogen, elixir-format
 msgid "Months"
 msgstr "月"
@@ -203,7 +203,7 @@ msgstr "月"
 msgid "New task"
 msgstr "新しいタスク"
 
-#: lib/gantt_ex/i18n.ex:172
+#: lib/gantt_ex/i18n.ex:177
 #, elixir-autogen, elixir-format
 msgid "No"
 msgstr "いいえ"
@@ -223,7 +223,7 @@ msgstr "なし（最上位）"
 msgid "Parent"
 msgstr "親タスク"
 
-#: lib/gantt_ex/i18n.ex:184
+#: lib/gantt_ex/i18n.ex:189
 #, elixir-autogen, elixir-format
 msgid "Print"
 msgstr "印刷"
@@ -238,12 +238,12 @@ msgstr "進捗"
 msgid "Project"
 msgstr "プロジェクト"
 
-#: lib/gantt_ex/i18n.ex:190
+#: lib/gantt_ex/i18n.ex:195
 #, elixir-autogen, elixir-format
 msgid "Quarters"
 msgstr "四半期"
 
-#: lib/gantt_ex/i18n.ex:202
+#: lib/gantt_ex/i18n.ex:207
 #, elixir-autogen, elixir-format
 msgid "Resize"
 msgstr "サイズ変更"
@@ -278,7 +278,7 @@ msgstr "開始-開始"
 msgid "Task"
 msgstr "タスク"
 
-#: lib/gantt_ex/i18n.ex:200
+#: lib/gantt_ex/i18n.ex:205
 #, elixir-autogen, elixir-format
 msgid "Task list"
 msgstr "タスク一覧"
@@ -298,12 +298,12 @@ msgstr "この依存関係は許可されていません"
 msgid "Time period"
 msgstr "期間"
 
-#: lib/gantt_ex/i18n.ex:201
+#: lib/gantt_ex/i18n.ex:206
 #, elixir-autogen, elixir-format
 msgid "Timeline"
 msgstr "タイムライン"
 
-#: lib/gantt_ex/i18n.ex:179
+#: lib/gantt_ex/i18n.ex:184
 #, elixir-autogen, elixir-format
 msgid "Today"
 msgstr "今日"
@@ -313,350 +313,350 @@ msgstr "今日"
 msgid "Type"
 msgstr "種類"
 
-#: lib/gantt_ex/i18n.ex:188
+#: lib/gantt_ex/i18n.ex:193
 #, elixir-autogen, elixir-format
 msgid "Weeks"
 msgstr "週"
 
-#: lib/gantt_ex/i18n.ex:191
+#: lib/gantt_ex/i18n.ex:196
 #, elixir-autogen, elixir-format
 msgid "Years"
 msgstr "年"
 
-#: lib/gantt_ex/i18n.ex:171
+#: lib/gantt_ex/i18n.ex:176
 #, elixir-autogen, elixir-format
 msgid "Yes"
 msgstr "はい"
 
-#: lib/gantt_ex/i18n.ex:176
+#: lib/gantt_ex/i18n.ex:181
 #, elixir-autogen, elixir-format
 msgid "Zoom"
 msgstr "ズーム"
 
-#: lib/gantt_ex/i18n.ex:177
+#: lib/gantt_ex/i18n.ex:182
 #, elixir-autogen, elixir-format
 msgid "Zoom in"
 msgstr "ズームイン"
 
-#: lib/gantt_ex/i18n.ex:178
+#: lib/gantt_ex/i18n.ex:183
 #, elixir-autogen, elixir-format
 msgid "Zoom out"
 msgstr "ズームアウト"
 
-#: lib/gantt_ex/i18n.ex:193
+#: lib/gantt_ex/i18n.ex:198
 #, elixir-autogen, elixir-format
 msgid "can't be blank"
 msgstr "入力してください"
 
-#: lib/gantt_ex/i18n.ex:194
+#: lib/gantt_ex/i18n.ex:199
 #, elixir-autogen, elixir-format
 msgid "is not a valid date"
 msgstr "有効な日付ではありません"
 
-#: lib/gantt_ex/i18n.ex:195
+#: lib/gantt_ex/i18n.ex:200
 #, elixir-autogen, elixir-format
 msgid "must be a whole number"
 msgstr "整数で入力してください"
 
-#: lib/gantt_ex/i18n.ex:197
+#: lib/gantt_ex/i18n.ex:202
 #, elixir-autogen, elixir-format
 msgid "must be after the start date"
 msgstr "開始日より後の日付にしてください"
 
-#: lib/gantt_ex/i18n.ex:196
+#: lib/gantt_ex/i18n.ex:201
 #, elixir-autogen, elixir-format
 msgid "must be between 0 and 100"
 msgstr "0〜100の範囲で入力してください"
 
-#: lib/gantt_ex/i18n.ex:265
+#: lib/gantt_ex/i18n.ex:270
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%-d"
 msgstr "%-d"
 
-#: lib/gantt_ex/i18n.ex:268
+#: lib/gantt_ex/i18n.ex:273
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%A, %B %-d"
 msgstr "%B%-d日 %A"
 
-#: lib/gantt_ex/i18n.ex:269
+#: lib/gantt_ex/i18n.ex:274
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%B %Y"
 msgstr "%Y年%B"
 
-#: lib/gantt_ex/i18n.ex:264
+#: lib/gantt_ex/i18n.ex:269
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%H:%M"
 msgstr "%H:%M"
 
-#: lib/gantt_ex/i18n.ex:271
+#: lib/gantt_ex/i18n.ex:276
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%Y"
 msgstr "%Y年"
 
-#: lib/gantt_ex/i18n.ex:266
+#: lib/gantt_ex/i18n.ex:271
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%a %-d"
 msgstr "%-d (%a)"
 
-#: lib/gantt_ex/i18n.ex:270
+#: lib/gantt_ex/i18n.ex:275
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%b"
 msgstr "%b"
 
-#: lib/gantt_ex/i18n.ex:267
+#: lib/gantt_ex/i18n.ex:272
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%b %-d"
 msgstr "%b%-d日"
 
-#: lib/gantt_ex/i18n.ex:262
+#: lib/gantt_ex/i18n.ex:267
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%m/%d/%Y"
 msgstr "%Y/%m/%d"
 
-#: lib/gantt_ex/i18n.ex:263
+#: lib/gantt_ex/i18n.ex:268
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%m/%d/%Y %H:%M"
 msgstr "%Y/%m/%d %H:%M"
 
-#: lib/gantt_ex/i18n.ex:272
+#: lib/gantt_ex/i18n.ex:277
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "Q%q"
 msgstr "第%q四半期"
 
-#: lib/gantt_ex/i18n.ex:298
+#: lib/gantt_ex/i18n.ex:303
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "April"
 msgstr "4月"
 
-#: lib/gantt_ex/i18n.ex:299
+#: lib/gantt_ex/i18n.ex:304
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "August"
 msgstr "8月"
 
-#: lib/gantt_ex/i18n.ex:301
+#: lib/gantt_ex/i18n.ex:306
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "December"
 msgstr "12月"
 
-#: lib/gantt_ex/i18n.ex:297
+#: lib/gantt_ex/i18n.ex:302
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "February"
 msgstr "2月"
 
-#: lib/gantt_ex/i18n.ex:297
+#: lib/gantt_ex/i18n.ex:302
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "January"
 msgstr "1月"
 
-#: lib/gantt_ex/i18n.ex:299
+#: lib/gantt_ex/i18n.ex:304
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "July"
 msgstr "7月"
 
-#: lib/gantt_ex/i18n.ex:299
+#: lib/gantt_ex/i18n.ex:304
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "June"
 msgstr "6月"
 
-#: lib/gantt_ex/i18n.ex:298
+#: lib/gantt_ex/i18n.ex:303
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "March"
 msgstr "3月"
 
-#: lib/gantt_ex/i18n.ex:298
+#: lib/gantt_ex/i18n.ex:303
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "May"
 msgstr "5月"
 
-#: lib/gantt_ex/i18n.ex:301
+#: lib/gantt_ex/i18n.ex:306
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "November"
 msgstr "11月"
 
-#: lib/gantt_ex/i18n.ex:300
+#: lib/gantt_ex/i18n.ex:305
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "October"
 msgstr "10月"
 
-#: lib/gantt_ex/i18n.ex:300
+#: lib/gantt_ex/i18n.ex:305
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "September"
 msgstr "9月"
 
-#: lib/gantt_ex/i18n.ex:304
+#: lib/gantt_ex/i18n.ex:309
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Apr"
 msgstr "4月"
 
-#: lib/gantt_ex/i18n.ex:306
+#: lib/gantt_ex/i18n.ex:311
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Aug"
 msgstr "8月"
 
-#: lib/gantt_ex/i18n.ex:308
+#: lib/gantt_ex/i18n.ex:313
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Dec"
 msgstr "12月"
 
-#: lib/gantt_ex/i18n.ex:303
+#: lib/gantt_ex/i18n.ex:308
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Feb"
 msgstr "2月"
 
-#: lib/gantt_ex/i18n.ex:303
+#: lib/gantt_ex/i18n.ex:308
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Jan"
 msgstr "1月"
 
-#: lib/gantt_ex/i18n.ex:306
+#: lib/gantt_ex/i18n.ex:311
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Jul"
 msgstr "7月"
 
-#: lib/gantt_ex/i18n.ex:305
+#: lib/gantt_ex/i18n.ex:310
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Jun"
 msgstr "6月"
 
-#: lib/gantt_ex/i18n.ex:304
+#: lib/gantt_ex/i18n.ex:309
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Mar"
 msgstr "3月"
 
-#: lib/gantt_ex/i18n.ex:305
+#: lib/gantt_ex/i18n.ex:310
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "May"
 msgstr "5月"
 
-#: lib/gantt_ex/i18n.ex:308
+#: lib/gantt_ex/i18n.ex:313
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Nov"
 msgstr "11月"
 
-#: lib/gantt_ex/i18n.ex:307
+#: lib/gantt_ex/i18n.ex:312
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Oct"
 msgstr "10月"
 
-#: lib/gantt_ex/i18n.ex:307
+#: lib/gantt_ex/i18n.ex:312
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Sep"
 msgstr "9月"
 
-#: lib/gantt_ex/i18n.ex:312
+#: lib/gantt_ex/i18n.ex:317
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Friday"
 msgstr "金曜日"
 
-#: lib/gantt_ex/i18n.ex:310
+#: lib/gantt_ex/i18n.ex:315
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Monday"
 msgstr "月曜日"
 
-#: lib/gantt_ex/i18n.ex:312
+#: lib/gantt_ex/i18n.ex:317
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Saturday"
 msgstr "土曜日"
 
-#: lib/gantt_ex/i18n.ex:313
+#: lib/gantt_ex/i18n.ex:318
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Sunday"
 msgstr "日曜日"
 
-#: lib/gantt_ex/i18n.ex:311
+#: lib/gantt_ex/i18n.ex:316
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Thursday"
 msgstr "木曜日"
 
-#: lib/gantt_ex/i18n.ex:310
+#: lib/gantt_ex/i18n.ex:315
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Tuesday"
 msgstr "火曜日"
 
-#: lib/gantt_ex/i18n.ex:311
+#: lib/gantt_ex/i18n.ex:316
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Wednesday"
 msgstr "水曜日"
 
-#: lib/gantt_ex/i18n.ex:317
+#: lib/gantt_ex/i18n.ex:322
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Fri"
 msgstr "金"
 
-#: lib/gantt_ex/i18n.ex:315
+#: lib/gantt_ex/i18n.ex:320
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Mon"
 msgstr "月"
 
-#: lib/gantt_ex/i18n.ex:317
+#: lib/gantt_ex/i18n.ex:322
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Sat"
 msgstr "土"
 
-#: lib/gantt_ex/i18n.ex:318
+#: lib/gantt_ex/i18n.ex:323
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Sun"
 msgstr "日"
 
-#: lib/gantt_ex/i18n.ex:316
+#: lib/gantt_ex/i18n.ex:321
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Thu"
 msgstr "木"
 
-#: lib/gantt_ex/i18n.ex:315
+#: lib/gantt_ex/i18n.ex:320
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Tue"
 msgstr "火"
 
-#: lib/gantt_ex/i18n.ex:316
+#: lib/gantt_ex/i18n.ex:321
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Wed"
@@ -667,89 +667,109 @@ msgstr "水"
 msgid "WBS"
 msgstr "WBS"
 
-#: lib/gantt_ex/i18n.ex:175
+#: lib/gantt_ex/i18n.ex:180
 #, elixir-autogen, elixir-format
 msgid "Redo"
 msgstr "やり直し"
 
-#: lib/gantt_ex/i18n.ex:174
+#: lib/gantt_ex/i18n.ex:179
 #, elixir-autogen, elixir-format
 msgid "Undo"
 msgstr "元に戻す"
 
-#: lib/gantt_ex/i18n.ex:230
+#: lib/gantt_ex/i18n.ex:235
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to delete %{count} task?"
 msgid_plural "Are you sure you want to delete these %{count} tasks?"
 msgstr[0] "これら%{count}件のタスクを削除してもよろしいですか？"
 
-#: lib/gantt_ex/i18n.ex:160
+#: lib/gantt_ex/i18n.ex:165
 #, elixir-autogen, elixir-format
 msgid "As late as possible"
 msgstr "できるだけ遅く"
 
-#: lib/gantt_ex/i18n.ex:159
+#: lib/gantt_ex/i18n.ex:164
 #, elixir-autogen, elixir-format
 msgid "As soon as possible"
 msgstr "できるだけ早く"
 
-#: lib/gantt_ex/i18n.ex:156
+#: lib/gantt_ex/i18n.ex:161
 #, elixir-autogen, elixir-format
 msgid "Constraint"
 msgstr "制約"
 
-#: lib/gantt_ex/i18n.ex:158
+#: lib/gantt_ex/i18n.ex:163
 #, elixir-autogen, elixir-format
 msgid "Constraint date"
 msgstr "制約日"
 
-#: lib/gantt_ex/i18n.ex:157
+#: lib/gantt_ex/i18n.ex:162
 #, elixir-autogen, elixir-format
 msgid "Constraint type"
 msgstr "制約の種類"
 
-#: lib/gantt_ex/i18n.ex:163
+#: lib/gantt_ex/i18n.ex:168
 #, elixir-autogen, elixir-format
 msgid "Finish no earlier than"
 msgstr "指定日以降に終了"
 
-#: lib/gantt_ex/i18n.ex:164
+#: lib/gantt_ex/i18n.ex:169
 #, elixir-autogen, elixir-format
 msgid "Finish no later than"
 msgstr "指定日までに終了"
 
-#: lib/gantt_ex/i18n.ex:166
+#: lib/gantt_ex/i18n.ex:171
 #, elixir-autogen, elixir-format
 msgid "Must finish on"
 msgstr "指定日に終了"
 
-#: lib/gantt_ex/i18n.ex:165
+#: lib/gantt_ex/i18n.ex:170
 #, elixir-autogen, elixir-format
 msgid "Must start on"
 msgstr "指定日に開始"
 
-#: lib/gantt_ex/i18n.ex:161
+#: lib/gantt_ex/i18n.ex:166
 #, elixir-autogen, elixir-format
 msgid "Start no earlier than"
 msgstr "指定日以降に開始"
 
-#: lib/gantt_ex/i18n.ex:162
+#: lib/gantt_ex/i18n.ex:167
 #, elixir-autogen, elixir-format
 msgid "Start no later than"
 msgstr "指定日までに開始"
 
-#: lib/gantt_ex/i18n.ex:152
+#: lib/gantt_ex/i18n.ex:157
 #, elixir-autogen, elixir-format
 msgid "Critical path"
 msgstr "クリティカルパス"
 
-#: lib/gantt_ex/i18n.ex:154
+#: lib/gantt_ex/i18n.ex:159
 #, elixir-autogen, elixir-format
 msgid "Free slack"
 msgstr "フリーフロート"
 
-#: lib/gantt_ex/i18n.ex:153
+#: lib/gantt_ex/i18n.ex:158
 #, elixir-autogen, elixir-format
 msgid "Total slack"
-
 msgstr "トータルフロート"
+
+#: lib/gantt_ex/i18n.ex:152
+#, elixir-autogen, elixir-format
+msgid "Baseline"
+msgstr "ベースライン"
+
+#: lib/gantt_ex/i18n.ex:155
+#, elixir-autogen, elixir-format
+msgid "Deadline"
+msgstr "期限"
+
+#: lib/gantt_ex/i18n.ex:154
+#, elixir-autogen, elixir-format
+msgid "Planned end"
+msgstr "計画終了日"
+
+#: lib/gantt_ex/i18n.ex:153
+#, elixir-autogen, elixir-format
+msgid "Planned start"
+
+msgstr "計画開始日"

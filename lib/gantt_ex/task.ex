@@ -18,6 +18,8 @@ defmodule GanttEx.Task do
     * `:calendar_id` - the working-time calendar of the task (see `GanttEx.Calendar`).
     * `:constraint_type`, `:constraint_date` - scheduling constraint used by
       auto-scheduling (see `GanttEx.Scheduler` and `constraint_types/0`).
+    * `:planned_start`, `:planned_end` - the baseline (the original plan).
+    * `:deadline` - the date the task must be finished by.
     * `:meta` - any additional fields (for custom grid columns, templates, ...).
 
   Only one or two of `:start_date`, `:end_date` and `:duration` are needed: the
@@ -64,7 +66,10 @@ defmodule GanttEx.Task do
     :progress_color,
     :calendar_id,
     :constraint_type,
-    :constraint_date
+    :constraint_date,
+    :planned_start,
+    :planned_end,
+    :deadline
   ]
 
   @aliases %{parent_id: :parent}
@@ -87,6 +92,9 @@ defmodule GanttEx.Task do
             calendar_id: nil,
             constraint_type: nil,
             constraint_date: nil,
+            planned_start: nil,
+            planned_end: nil,
+            deadline: nil,
             meta: %{}
 
   @typedoc "A task or link identifier."
@@ -121,6 +129,9 @@ defmodule GanttEx.Task do
           calendar_id: term(),
           constraint_type: constraint() | nil,
           constraint_date: NaiveDateTime.t() | nil,
+          planned_start: NaiveDateTime.t() | nil,
+          planned_end: NaiveDateTime.t() | nil,
+          deadline: NaiveDateTime.t() | nil,
           meta: map()
         }
 
@@ -289,8 +300,16 @@ defmodule GanttEx.Task do
   defp cast_field(:text, text) when is_atom(text) or is_number(text), do: {:ok, to_string(text)}
   defp cast_field(:text, _text), do: :error
 
-  defp cast_field(key, value) when key in [:start_date, :end_date, :constraint_date],
-    do: Dates.cast(value)
+  defp cast_field(key, value)
+       when key in [
+              :start_date,
+              :end_date,
+              :constraint_date,
+              :planned_start,
+              :planned_end,
+              :deadline
+            ],
+       do: Dates.cast(value)
 
   defp cast_field(:constraint_type, value), do: cast_constraint(value)
   defp cast_field(:type, value), do: cast_type(value)

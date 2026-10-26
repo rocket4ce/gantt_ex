@@ -1084,6 +1084,47 @@ defmodule GanttEx.Live.Styles do
         pointer-events: none;
       }
 
+      .gx-row-marks {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .gx-baseline {
+        position: absolute;
+        height: 5px;
+        background: var(--gx-baseline, #94a3b8);
+        border-radius: 3px;
+        opacity: 0.85;
+      }
+
+      .gx-deadline {
+        position: absolute;
+        z-index: 3;
+        width: 0;
+        border-left: 2px solid var(--gx-deadline, #f59e0b);
+      }
+
+      .gx-deadline::before {
+        content: "";
+        position: absolute;
+        top: -4px;
+        left: 0;
+        width: 9px;
+        height: 7px;
+        background: var(--gx-deadline, #f59e0b);
+        clip-path: polygon(0 0, 100% 50%, 0 100%);
+      }
+
+      .gx-deadline--overdue {
+        --gx-deadline: var(--gx-danger);
+      }
+
+      .gx-bar--overdue .gx-bar-body {
+        box-shadow: inset 0 0 0 2px var(--gx-danger), var(--gx-shadow);
+      }
+
       .gx-constraint {
         position: absolute;
         top: -5px;

@@ -63,6 +63,9 @@ defmodule GanttEx.Live.Gantt do
       The toolbar has a toggle for it. Defaults to `false`.
     * `:show_slack` - draw the free slack of each task after its bar.
       Defaults to `false`.
+    * `:baselines` - draw the baseline (`:planned_start` / `:planned_end`)
+      below each bar. Deadlines (`:deadline`) are always drawn, and tasks that
+      end after them are marked as overdue. Defaults to `false`.
     * `:undo` - undo and redo with the toolbar or Ctrl/Cmd+Z and
       Ctrl/Cmd+Shift+Z (Ctrl+Y). Undone changes are reported as events too.
       Defaults to `true`.
@@ -203,6 +206,7 @@ defmodule GanttEx.Live.Gantt do
     auto_scheduling_strict: false,
     critical_path: false,
     show_slack: false,
+    baselines: false,
     export_filename: "gantt",
     theme: "auto",
     class: nil,
@@ -439,7 +443,11 @@ defmodule GanttEx.Live.Gantt do
     timeline = build_timeline(a, level, today)
 
     layout =
-      Layout.build(a.store, rows, timeline, row_height: a.row_height, bar_height: bar_height)
+      Layout.build(a.store, rows, timeline,
+        row_height: a.row_height,
+        bar_height: bar_height,
+        baselines: a.baselines
+      )
 
     bars = Enum.map(layout.bars, &decorate_bar(&1, Map.put(a, :timeline, timeline)))
     columns = Columns.build(a.column, a.labels, widths: a.column_widths, readonly: a.readonly)
@@ -603,12 +611,27 @@ defmodule GanttEx.Live.Gantt do
       linkable: not a.readonly and a.links_editable,
       class: a.task_class && a.task_class.(task),
       constraint_x: constraint_x(task, bar, a),
+      deadline: deadline(task, bar, a),
       critical:
         a.show_critical and a.analysis != nil and
           match?(%{critical: true}, a.analysis.tasks[task.id]),
       slack_width: slack_width(task, a)
     })
   end
+
+  # Deadlines are inclusive days: a task due on the 10th may end on the 10th.
+  defp deadline(%Task{deadline: %NaiveDateTime{} = date} = task, bar, a) do
+    due = TaskForm.parse_end(date, a.duration_unit)
+
+    %{
+      x: Timeline.x(a.timeline, due),
+      y: bar.y,
+      height: bar.height,
+      overdue: NaiveDateTime.compare(task.end_date, due) == :gt
+    }
+  end
+
+  defp deadline(_task, _bar, _a), do: nil
 
   defp slack_width(task, %{show_slack: true, analysis: %{tasks: tasks}} = a) do
     case tasks[task.id] do
@@ -826,6 +849,7 @@ defmodule GanttEx.Live.Gantt do
             >
               <.highlights highlights={@highlights} />
               <.markers ctx={@ctx} markers={@marker_items} />
+              <.row_marks ctx={@ctx} bars={@window_bars} />
               <.links ctx={@ctx} links={@window_links} width={@chart_width} height={@chart_height} />
               <.task_bar
                 :for={bar <- @window_bars}

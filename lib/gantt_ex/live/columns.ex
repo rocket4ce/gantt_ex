@@ -109,6 +109,9 @@ defmodule GanttEx.Live.Columns do
   defp label(:wbs, labels), do: labels.wbs
   defp label(:constraint_type, labels), do: labels.constraint
   defp label(:total_slack, labels), do: labels.total_slack
+  defp label(:planned_start, labels), do: labels.planned_start
+  defp label(:planned_end, labels), do: labels.planned_end
+  defp label(:deadline, labels), do: labels.deadline
   defp label(:free_slack, labels), do: labels.free_slack
   defp label(:add, _labels), do: ""
 
@@ -123,13 +126,27 @@ defmodule GanttEx.Live.Columns do
   defp width(field) when field in [:total_slack, :free_slack], do: 96
   defp width(_field), do: 104
 
-  defp align(field) when field in [:start_date, :end_date, :duration, :progress, :add],
-    do: "center"
+  defp align(field)
+       when field in [
+              :start_date,
+              :end_date,
+              :duration,
+              :progress,
+              :add,
+              :planned_start,
+              :planned_end,
+              :deadline
+            ],
+       do: "center"
 
   defp align(_field), do: "left"
 
   defp editor(:text), do: :text
-  defp editor(field) when field in [:start_date, :end_date], do: :date
+
+  defp editor(field)
+       when field in [:start_date, :end_date, :planned_start, :planned_end, :deadline],
+       do: :date
+
   defp editor(:duration), do: :number
   defp editor(:progress), do: :progress
   defp editor(:type), do: :type

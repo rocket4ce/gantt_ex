@@ -149,6 +149,20 @@ defmodule GanttEx.Live.Interaction do
     end
   end
 
+  def cell_attrs(%{field: field}, value, _task, unit)
+      when field in [:planned_start, :planned_end, :deadline] do
+    case Dates.cast(value) do
+      {:ok, %NaiveDateTime{} = date} when field == :planned_end ->
+        %{planned_end: TaskForm.parse_end(date, unit)}
+
+      {:ok, %NaiveDateTime{} = date} ->
+        %{field => date}
+
+      _ ->
+        nil
+    end
+  end
+
   def cell_attrs(%{field: :duration}, value, _task, _unit) do
     case Integer.parse(to_string(value)) do
       {duration, ""} when duration >= 0 -> %{duration: duration}

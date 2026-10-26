@@ -465,6 +465,18 @@ defmodule GanttEx.Live.Components do
       field when field in [:total_slack, :free_slack] ->
         ""
 
+      :planned_start ->
+        ctx.format.(task.planned_start, ctx.date_pattern)
+
+      :planned_end ->
+        ctx.format.(
+          TaskForm.inclusive_end(task.planned_end, task.planned_start, ctx.unit),
+          ctx.date_pattern
+        )
+
+      :deadline ->
+        ctx.format.(task.deadline, ctx.date_pattern)
+
       field ->
         task.meta |> meta_value(field) |> to_string()
     end
@@ -534,13 +546,38 @@ defmodule GanttEx.Live.Components do
 
   defp editor_value(task, %{field: field}, ctx) do
     case field do
-      :start_date -> TaskForm.input_date(task.start_date, ctx.unit)
-      :end_date -> TaskForm.input_date(TaskForm.display_end(task, ctx.unit), ctx.unit)
-      :progress -> task.progress |> Kernel.*(100) |> round() |> Integer.to_string()
-      :type -> Atom.to_string(task.type)
-      :duration -> to_string(task.duration)
-      :text -> task.text
-      field -> task.meta |> meta_value(field) |> to_string()
+      :start_date ->
+        TaskForm.input_date(task.start_date, ctx.unit)
+
+      :planned_start ->
+        TaskForm.input_date(task.planned_start, ctx.unit)
+
+      :planned_end ->
+        TaskForm.input_date(
+          TaskForm.inclusive_end(task.planned_end, task.planned_start, ctx.unit),
+          ctx.unit
+        )
+
+      :deadline ->
+        TaskForm.input_date(task.deadline, ctx.unit)
+
+      :end_date ->
+        TaskForm.input_date(TaskForm.display_end(task, ctx.unit), ctx.unit)
+
+      :progress ->
+        task.progress |> Kernel.*(100) |> round() |> Integer.to_string()
+
+      :type ->
+        Atom.to_string(task.type)
+
+      :duration ->
+        to_string(task.duration)
+
+      :text ->
+        task.text
+
+      field ->
+        task.meta |> meta_value(field) |> to_string()
     end
   end
 
@@ -594,6 +631,7 @@ defmodule GanttEx.Live.Components do
         @bar.selected && "gx-bar--selected",
         @bar.drag == "none" && "gx-bar--locked",
         @bar[:critical] && "gx-bar--critical",
+        @bar[:deadline] && @bar.deadline.overdue && "gx-bar--overdue",
         @bar.class
       ]}
       style={bar_style(@bar)}
@@ -684,7 +722,46 @@ defmodule GanttEx.Live.Components do
         <dt>{@ctx.labels.progress}</dt>
         <dd>{round(@task.progress * 100)}%</dd>
       <% end %>
+      <%= if @task.planned_start && @task.planned_end do %>
+        <dt>{@ctx.labels.baseline}</dt>
+        <dd>
+          {@ctx.format.(@task.planned_start, @ctx.date_pattern)} – {@ctx.format.(
+            TaskForm.inclusive_end(@task.planned_end, @task.planned_start, @ctx.unit),
+            @ctx.date_pattern
+          )}
+        </dd>
+      <% end %>
+      <%= if @task.deadline do %>
+        <dt>{@ctx.labels.deadline}</dt>
+        <dd>{@ctx.format.(@task.deadline, @ctx.date_pattern)}</dd>
+      <% end %>
     </dl>
+    """
+  end
+
+  @doc "Renders the baselines and deadlines of the bars (they do not move while dragging)."
+  attr :ctx, :map, required: true
+  attr :bars, :list, required: true
+
+  def row_marks(assigns) do
+    ~H"""
+    <div class="gx-row-marks" aria-hidden="true">
+      <%= for bar <- @bars do %>
+        <div
+          :if={bar.baseline}
+          class="gx-baseline"
+          style={"left: #{px(bar.baseline.x)}; top: #{px(bar.baseline.y)}; width: #{px(bar.baseline.width)}"}
+        >
+        </div>
+        <div
+          :if={bar[:deadline]}
+          class={["gx-deadline", bar.deadline.overdue && "gx-deadline--overdue"]}
+          style={"left: #{px(bar.deadline.x)}; top: #{px(bar.deadline.y)}; height: #{px(bar.deadline.height)}"}
+          title={@ctx.labels.deadline}
+        >
+        </div>
+      <% end %>
+    </div>
     """
   end
 
@@ -893,6 +970,27 @@ defmodule GanttEx.Live.Components do
                 />
               </div>
             </fieldset>
+            <fieldset :if={:baseline in @sections} class="gx-fieldset">
+              <legend>{@ctx.labels.baseline}</legend>
+              <div class="gx-field-row">
+                <.field
+                  field={@lightbox.form[:planned_start]}
+                  type={TaskForm.date_input_type(@ctx.unit)}
+                  label={@ctx.labels.planned_start}
+                />
+                <.field
+                  field={@lightbox.form[:planned_end]}
+                  type={TaskForm.date_input_type(@ctx.unit)}
+                  label={@ctx.labels.planned_end}
+                />
+              </div>
+            </fieldset>
+            <.field
+              :if={:deadline in @sections}
+              field={@lightbox.form[:deadline]}
+              type={TaskForm.date_input_type(@ctx.unit)}
+              label={@ctx.labels.deadline}
+            />
             <fieldset :if={:constraint in @sections} class="gx-fieldset">
               <legend>{@ctx.labels.constraint}</legend>
               <div class="gx-field-row">

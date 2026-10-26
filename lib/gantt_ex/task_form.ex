@@ -8,7 +8,7 @@ defmodule GanttEx.TaskForm do
 
       iex> task = GanttEx.Task.new!(id: 1, text: "Design", start_date: ~D[2025-01-06], duration: 3, progress: 0.4)
       iex> GanttEx.TaskForm.params(task, :day)
-      %{"text" => "Design", "type" => "task", "start_date" => "2025-01-06", "duration" => "3", "progress" => "40", "parent" => "", "constraint_type" => "", "constraint_date" => ""}
+      %{"text" => "Design", "type" => "task", "start_date" => "2025-01-06", "duration" => "3", "progress" => "40", "parent" => "", "constraint_type" => "", "constraint_date" => "", "planned_start" => "", "planned_end" => "", "deadline" => ""}
 
       iex> GanttEx.TaskForm.cast(%{"text" => " Build ", "type" => "task", "start_date" => "2025-01-08", "duration" => "2", "progress" => "25"}, :day)
       {:ok, %{text: "Build", type: :task, start_date: ~N[2025-01-08 00:00:00], duration: 2, progress: 0.25}}
@@ -77,6 +77,23 @@ defmodule GanttEx.TaskForm do
   end
 
   @doc """
+  Like `display_end/2` for any end date (such as `:planned_end`).
+
+      iex> GanttEx.TaskForm.inclusive_end(~N[2025-01-08 00:00:00], ~N[2025-01-06 00:00:00], :day)
+      ~N[2025-01-07 00:00:00]
+
+      iex> GanttEx.TaskForm.inclusive_end(nil, nil, :day)
+      nil
+  """
+  @spec inclusive_end(NaiveDateTime.t() | nil, NaiveDateTime.t() | nil, Dates.unit()) ::
+          NaiveDateTime.t() | nil
+  def inclusive_end(nil, _start, _unit), do: nil
+
+  def inclusive_end(finish, start, unit) do
+    display_end(%Task{id: nil, start_date: start || finish, end_date: finish}, unit)
+  end
+
+  @doc """
   Converts a displayed (inclusive) end date back to the exclusive end date.
   The inverse of `display_end/2`.
 
@@ -107,7 +124,11 @@ defmodule GanttEx.TaskForm do
       "parent" => if(task.parent, do: Store.key(task.parent), else: ""),
       "constraint_type" =>
         if(task.constraint_type, do: Atom.to_string(task.constraint_type), else: ""),
-      "constraint_date" => input_date(task.constraint_date, unit)
+      "constraint_date" => input_date(task.constraint_date, unit),
+      "planned_start" => input_date(task.planned_start, unit),
+      "planned_end" =>
+        input_date(inclusive_end(task.planned_end, task.planned_start, unit), unit),
+      "deadline" => input_date(task.deadline, unit)
     }
   end
 
@@ -133,7 +154,10 @@ defmodule GanttEx.TaskForm do
         :progress,
         :parent,
         :constraint_type,
-        :constraint_date
+        :constraint_date,
+        :planned_start,
+        :planned_end,
+        :deadline
       ]
       |> Enum.reduce({%{}, []}, fn field, acc ->
         cast_param(acc, field, Map.fetch(params, Atom.to_string(field)), unit, store)
@@ -156,6 +180,23 @@ defmodule GanttEx.TaskForm do
     case Task.cast_constraint(value) do
       {:ok, type} -> {Map.put(attrs, :constraint_type, type), errors}
       :error -> {attrs, [{:constraint_type, :required} | errors]}
+    end
+  end
+
+  defp cast_param({attrs, errors}, field, {:ok, value}, unit, _store)
+       when field in [:planned_start, :planned_end, :deadline] do
+    case Dates.cast(value) do
+      {:ok, nil} ->
+        {Map.put(attrs, field, nil), errors}
+
+      {:ok, date} when field == :planned_end ->
+        {Map.put(attrs, field, parse_end(date, unit)), errors}
+
+      {:ok, date} ->
+        {Map.put(attrs, field, date), errors}
+
+      :error ->
+        {attrs, [{field, :invalid_date} | errors]}
     end
   end
 

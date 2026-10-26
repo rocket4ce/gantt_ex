@@ -38,7 +38,8 @@ defmodule GanttEx.Layout do
           y: float(),
           width: float(),
           height: number(),
-          progress: float()
+          progress: float(),
+          baseline: %{x: float(), y: float(), width: float()} | nil
         }
 
   @typedoc "A positioned link."
@@ -69,16 +70,19 @@ defmodule GanttEx.Layout do
     * `:row_height` - defaults to `36`.
     * `:bar_height` - defaults to `row_height - 12`.
     * `:min_bar_width` - defaults to `6`, so very short tasks stay visible.
+    * `:baselines` - make room below the bars for the baselines
+      (`:planned_start` / `:planned_end`). Defaults to `false`.
   """
   @spec build(Store.t(), [Store.row()], Timeline.t(), keyword()) :: t()
   def build(%Store{} = store, rows, %Timeline{} = timeline, opts \\ []) do
     row_height = Keyword.get(opts, :row_height, 36)
     bar_height = Keyword.get(opts, :bar_height, row_height - 12)
     min_width = Keyword.get(opts, :min_bar_width, 6)
+    baselines = Keyword.get(opts, :baselines, false)
 
     bars =
       Enum.map(rows, fn row ->
-        bar(row, timeline, row_height, bar_height, min_width)
+        bar(row, timeline, row_height, bar_height, min_width, baselines)
       end)
 
     bar_index = Map.new(bars, &{&1.key, &1})
@@ -113,8 +117,11 @@ defmodule GanttEx.Layout do
     }
   end
 
-  defp bar(%{task: task} = row, timeline, row_height, bar_height, min_width) do
-    y = row.index * row_height + (row_height - bar_height) / 2
+  @baseline_height 5
+
+  defp bar(%{task: task} = row, timeline, row_height, bar_height, min_width, baselines) do
+    room = if baselines, do: @baseline_height + 2, else: 0
+    y = row.index * row_height + (row_height - bar_height - room) / 2
     x = Timeline.x(timeline, task.start_date)
 
     {x, width} =
@@ -133,9 +140,21 @@ defmodule GanttEx.Layout do
       y: y,
       width: width,
       height: bar_height,
-      progress: task.progress
+      progress: task.progress,
+      baseline: baselines && baseline(task, timeline, y + bar_height + 2)
     }
   end
+
+  defp baseline(
+         %{planned_start: %NaiveDateTime{} = start, planned_end: %NaiveDateTime{} = finish},
+         timeline,
+         y
+       ) do
+    x = Timeline.x(timeline, start)
+    %{x: x, y: y, width: max(Timeline.x(timeline, finish) - x, 2)}
+  end
+
+  defp baseline(_task, _timeline, _y), do: nil
 
   defp row_box(bar, row_height), do: %{x: bar.x, width: bar.width, y: bar.row * row_height}
 end
