@@ -821,6 +821,36 @@ defmodule GanttEx.Live.Styles do
         stroke-dasharray: 4 3;
       }
 
+      .gx-marker {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        z-index: 4;
+        width: 0;
+        border-left: 2px dashed var(--gx-marker-color, #f43f5e);
+        pointer-events: none;
+      }
+
+      .gx-marker--today {
+        --gx-marker-color: var(--gx-accent);
+        border-left-style: solid;
+      }
+
+      .gx-marker-label {
+        position: sticky;
+        top: calc(var(--gx-header-height, 64px) + 6px);
+        display: inline-block;
+        margin-left: 4px;
+        padding: 1px 7px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #ffffff;
+        white-space: nowrap;
+        background: var(--gx-marker-color, #f43f5e);
+        border-radius: 999px;
+        box-shadow: var(--gx-shadow);
+      }
+
       /* ----------------------------------------------------------------- bars */
       .gx-bar {
         position: absolute;

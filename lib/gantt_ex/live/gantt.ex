@@ -73,6 +73,8 @@ defmodule GanttEx.Live.Gantt do
     * `:week_start` - first day of the week (`1` = Monday, `7` = Sunday). Defaults to `1`.
     * `:weekend` - ISO days highlighted as non-working. Defaults to `[6, 7]`.
     * `:today` - the current date, used by the "Today" button. Defaults to now.
+    * `:markers` - vertical lines marking dates (see `GanttEx.Marker`).
+    * `:today_marker` - add a marker for today. Defaults to `false`.
 
   Appearance:
 
@@ -134,7 +136,7 @@ defmodule GanttEx.Live.Gantt do
   import GanttEx.Live.Components
 
   alias GanttEx.{Dates, Event, Export, I18n, Layout, Link, LinkForm, Store, Task, TaskForm}
-  alias GanttEx.{Timeline, Zoom}
+  alias GanttEx.{Marker, Timeline, Zoom}
   alias GanttEx.Live.{Columns, Interaction}
 
   @hook "GanttEx.Live.Hook.Gantt"
@@ -169,6 +171,8 @@ defmodule GanttEx.Live.Gantt do
     work_time: false,
     calendar: nil,
     calendars: [],
+    markers: [],
+    today_marker: false,
     export_filename: "gantt",
     theme: "auto",
     class: nil,
@@ -426,6 +430,7 @@ defmodule GanttEx.Live.Gantt do
       chart_height: chart_height,
       canvas_width: layout.width + if(a.show_grid, do: grid_width, else: 0),
       snap_px: snap_px(timeline, a.duration_unit),
+      marker_items: marker_items(a, timeline, today),
       root_style: root_style(a, columns, grid_width, bar_height, level),
       ctx: %{
         id: a.id,
@@ -546,6 +551,19 @@ defmodule GanttEx.Live.Gantt do
     end
   end
 
+  defp marker_items(a, timeline, today) do
+    today_marker =
+      if a.today_marker,
+        do: [%Marker{id: :today, date: today, text: a.labels.today, class: "gx-marker--today"}],
+        else: []
+
+    for marker <- today_marker ++ Enum.map(a.markers, &Marker.new!/1),
+        NaiveDateTime.compare(marker.date, timeline.start_date) != :lt,
+        NaiveDateTime.compare(marker.date, timeline.end_date) == :lt do
+      %{marker: marker, key: to_string(marker.id), x: Timeline.x(timeline, marker.date)}
+    end
+  end
+
   # Weekends, or the non-working days of the global calendar with working time.
   defp non_working?(%{store: %Store{work_time: true, calendar: calendar}}, date),
     do: not GanttEx.Calendar.working_day?(calendar, date)
@@ -591,7 +609,8 @@ defmodule GanttEx.Live.Gantt do
     "--gx-row-height: #{a.row_height}px; --gx-bar-height: #{bar_height}px; " <>
       "--gx-scale-row-height: #{a.scale_height}px; --gx-height: #{safe_css(a.height, "640px")}; " <>
       "--gx-grid-width: #{if a.show_grid, do: grid_width, else: 0}px; " <>
-      "--gx-column-width: #{level.column_width}px; " <> column_vars
+      "--gx-column-width: #{level.column_width}px; " <>
+      "--gx-header-height: #{length(level.scales) * a.scale_height}px; " <> column_vars
   end
 
   defp safe_css(value, default) do
@@ -697,6 +716,7 @@ defmodule GanttEx.Live.Gantt do
               data-gx-chart
             >
               <.highlights highlights={@highlights} />
+              <.markers ctx={@ctx} markers={@marker_items} />
               <.links ctx={@ctx} links={@window_links} width={@chart_width} height={@chart_height} />
               <.task_bar
                 :for={bar <- @window_bars}

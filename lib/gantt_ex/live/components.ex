@@ -644,6 +644,24 @@ defmodule GanttEx.Live.Components do
     """
   end
 
+  @doc "Renders the timeline markers (see `GanttEx.Marker`)."
+  attr :ctx, :map, required: true
+  attr :markers, :list, required: true
+
+  def markers(assigns) do
+    ~H"""
+    <div
+      :for={item <- @markers}
+      id={"#{@ctx.id}-marker-#{dom_key(item.key)}"}
+      class={["gx-marker", item.marker.class]}
+      style={"left: #{px(item.x)}" <> if(item.marker.color, do: "; --gx-marker-color: #{item.marker.color}", else: "")}
+      title={"#{item.marker.text} · #{@ctx.format.(item.marker.date, @ctx.date_pattern)}"}
+    >
+      <span :if={item.marker.text != ""} class="gx-marker-label">{item.marker.text}</span>
+    </div>
+    """
+  end
+
   # -- popups ------------------------------------------------------------------
 
   @doc "Renders the quick info popup shown below a selected bar."
