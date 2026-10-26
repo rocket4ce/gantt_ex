@@ -9,6 +9,8 @@ defmodule GanttEx.DoctestTest do
   doctest GanttEx.Dependency
   doctest GanttEx.Scheduler
   doctest GanttEx.CriticalPath
+  doctest GanttEx.Resource
+  doctest GanttEx.ResourceLoad
   doctest GanttEx.Task
   doctest GanttEx.Link
   doctest GanttEx.Store

@@ -22,6 +22,7 @@ defmodule GanttEx.Task do
     * `:deadline` - the date the task must be finished by.
     * `:render` - `:split` draws the children of the task on its own row.
     * `:rollup` - also show the task on the rows of its ancestor projects.
+    * `:resources` - resource assignments (see `GanttEx.Resource.cast_assignments/1`).
     * `:meta` - any additional fields (for custom grid columns, templates, ...).
 
   Only one or two of `:start_date`, `:end_date` and `:duration` are needed: the
@@ -73,7 +74,8 @@ defmodule GanttEx.Task do
     :planned_end,
     :deadline,
     :render,
-    :rollup
+    :rollup,
+    :resources
   ]
 
   @aliases %{parent_id: :parent}
@@ -101,6 +103,7 @@ defmodule GanttEx.Task do
             deadline: nil,
             render: nil,
             rollup: false,
+            resources: [],
             meta: %{}
 
   @typedoc "A task or link identifier."
@@ -140,6 +143,7 @@ defmodule GanttEx.Task do
           deadline: NaiveDateTime.t() | nil,
           render: :split | nil,
           rollup: boolean(),
+          resources: [GanttEx.Resource.assignment()],
           meta: map()
         }
 
@@ -324,6 +328,7 @@ defmodule GanttEx.Task do
   defp cast_field(:render, value) when value in [:split, "split"], do: {:ok, :split}
   defp cast_field(:render, _value), do: :error
   defp cast_field(:rollup, value), do: cast_boolean(value)
+  defp cast_field(:resources, value), do: GanttEx.Resource.cast_assignments(value)
   defp cast_field(:type, value), do: cast_type(value)
   defp cast_field(:parent, value), do: {:ok, cast_parent(value)}
   defp cast_field(:calendar_id, value), do: {:ok, if(value == "", do: nil, else: value)}

@@ -468,6 +468,14 @@ defmodule GanttEx.Live.Components do
       :planned_start ->
         ctx.format.(task.planned_start, ctx.date_pattern)
 
+      :resources ->
+        Enum.map_join(task.resources, ", ", fn assignment ->
+          case Map.get(ctx[:resources] || %{}, Store.key(assignment.id)) do
+            nil -> to_string(assignment.id)
+            resource -> resource.text
+          end
+        end)
+
       :planned_end ->
         ctx.format.(
           TaskForm.inclusive_end(task.planned_end, task.planned_start, ctx.unit),
@@ -740,6 +748,49 @@ defmodule GanttEx.Live.Components do
     """
   end
 
+  @doc "Renders the resource panel: the load of every resource per column."
+  attr :ctx, :map, required: true
+  attr :rows, :list, required: true
+  attr :width, :integer, required: true
+  attr :show_grid, :boolean, default: true
+
+  def resource_panel(assigns) do
+    ~H"""
+    <section class="gx-resources" aria-label={@ctx.labels.resources}>
+      <div class="gx-resources-row gx-resources-row--head">
+        <div :if={@show_grid} class="gx-resources-name">{@ctx.labels.resources}</div>
+        <div class="gx-resources-cells" style={"width: #{@width}px"}></div>
+      </div>
+      <div
+        :for={row <- @rows}
+        id={"#{@ctx.id}-resource-#{dom_key(Store.key(row.resource.id))}"}
+        class={["gx-resources-row", row.overloaded && "gx-resources-row--overloaded"]}
+      >
+        <div :if={@show_grid} class="gx-resources-name">
+          <span class="gx-truncate">{row.resource.text}</span>
+          <span class="gx-resources-capacity">{row.resource.capacity}</span>
+        </div>
+        <div class="gx-resources-cells" style={"width: #{@width}px"}>
+          <div
+            :for={cell <- row.cells}
+            class={["gx-load", cell.overload && "gx-load--over"]}
+            style={"left: #{px(cell.x)}; width: #{px(cell.width)}; --gx-load: #{min(cell.load / max(cell.capacity, 0.001), 1.5) * 100 / 1.5}%"}
+            title={"#{@ctx.labels.load}: #{format_load(cell.load)} / #{format_load(cell.capacity)}"}
+          >
+            <span>{format_load(cell.load)}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  defp format_load(value) do
+    if value == Float.round(value),
+      do: value |> trunc() |> Integer.to_string(),
+      else: Float.to_string(Float.round(value, 1))
+  end
+
   @doc "Renders the tasks rolled up on the rows of their ancestor projects."
   attr :ctx, :map, required: true
   attr :rollups, :list, required: true
@@ -988,6 +1039,24 @@ defmodule GanttEx.Live.Components do
                   min="0"
                   label={"#{@ctx.labels.duration} (#{GanttEx.I18n.duration(0, @ctx.unit, @ctx.locale) |> String.replace(~r/^0\s*/, "")})"}
                 />
+              </div>
+            </fieldset>
+            <fieldset :if={:resources in @sections and @ctx[:resources] != %{}} class="gx-fieldset">
+              <legend>{@ctx.labels.resources}</legend>
+              <input type="hidden" name={@lightbox.form[:resources].name <> "[]"} value="" />
+              <div class="gx-checks">
+                <label
+                  :for={{key, resource} <- Enum.sort_by(@ctx.resources, &elem(&1, 1).text)}
+                  class="gx-check"
+                >
+                  <input
+                    type="checkbox"
+                    name={@lightbox.form[:resources].name <> "[]"}
+                    value={key}
+                    checked={key in List.wrap(@lightbox.form[:resources].value)}
+                  />
+                  <span>{resource.text}</span>
+                </label>
               </div>
             </fieldset>
             <fieldset :if={:baseline in @sections} class="gx-fieldset">

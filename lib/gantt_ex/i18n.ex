@@ -148,6 +148,10 @@ defmodule GanttEx.I18n do
         finish_to_finish: gettext("Finish to finish"),
         start_to_finish: gettext("Start to finish"),
         link_rejected: gettext("This dependency is not allowed"),
+        # resources
+        resources: gettext("Resources"),
+        load: gettext("Load"),
+        unassigned: gettext("Unassigned"),
         # baselines and deadlines
         baseline: gettext("Baseline"),
         planned_start: gettext("Planned start"),

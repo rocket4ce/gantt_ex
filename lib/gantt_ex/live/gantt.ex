@@ -63,6 +63,11 @@ defmodule GanttEx.Live.Gantt do
       The toolbar has a toggle for it. Defaults to `false`.
     * `:show_slack` - draw the free slack of each task after its bar.
       Defaults to `false`.
+    * `:resources` - the resources tasks are assigned to (see `GanttEx.Resource`).
+      Tasks list their assignments in `:resources`; the lightbox gets a
+      `:resources` section and grids can show a `:resources` column.
+    * `:resource_panel` - show the load of every resource below the chart
+      (see `GanttEx.ResourceLoad`). Defaults to `false`.
     * `:baselines` - draw the baseline (`:planned_start` / `:planned_end`)
       below each bar. Deadlines (`:deadline`) are always drawn, and tasks that
       end after them are marked as overdue. Defaults to `false`.
@@ -164,7 +169,7 @@ defmodule GanttEx.Live.Gantt do
     TaskForm
   }
 
-  alias GanttEx.{CriticalPath, Marker, Scheduler, Timeline, Zoom}
+  alias GanttEx.{CriticalPath, Marker, Resource, ResourceLoad, Scheduler, Timeline, Zoom}
   alias GanttEx.Live.{Columns, Interaction}
 
   @hook "GanttEx.Live.Hook.Gantt"
@@ -207,6 +212,8 @@ defmodule GanttEx.Live.Gantt do
     critical_path: false,
     show_slack: false,
     baselines: false,
+    resources: [],
+    resource_panel: false,
     export_filename: "gantt",
     theme: "auto",
     class: nil,
@@ -492,6 +499,9 @@ defmodule GanttEx.Live.Gantt do
       chart_height: chart_height,
       canvas_width: layout.width + if(a.show_grid, do: grid_width, else: 0),
       snap_px: snap_px(timeline, a.duration_unit),
+      resource_rows:
+        a.resource_panel && a.resources != [] &&
+          ResourceLoad.compute(a.store, a.resources, timeline),
       marker_items: marker_items(a, timeline, today),
       root_style: root_style(a, columns, grid_width, bar_height, level),
       ctx: %{
@@ -506,7 +516,12 @@ defmodule GanttEx.Live.Gantt do
         readonly: a.readonly,
         inline_edit: a.inline_edit,
         tooltips: a.tooltips,
-        lightbox: a.lightbox
+        lightbox: a.lightbox,
+        resources:
+          Map.new(a.resources, fn r ->
+            r = Resource.new!(r)
+            {Store.key(r.id), r}
+          end)
       }
     )
     |> apply_window()
@@ -873,6 +888,13 @@ defmodule GanttEx.Live.Gantt do
               />
             </div>
           </div>
+          <.resource_panel
+            :if={@resource_rows}
+            ctx={@ctx}
+            rows={@resource_rows}
+            width={@chart_width}
+            show_grid={@show_grid}
+          />
         </div>
       </div>
 
@@ -1056,7 +1078,11 @@ defmodule GanttEx.Live.Gantt do
       meta =
         if state.mode == :new, do: state.draft.meta, else: Store.get_task(a.store, state.id).meta
 
-      attrs = Map.merge(Interaction.extra_params(params, meta), attrs)
+      attrs =
+        params
+        |> Interaction.extra_params(meta)
+        |> Map.merge(attrs)
+        |> Map.merge(Interaction.resource_attrs(params, a.ctx.resources, current_task(a, state)))
 
       result =
         case state.mode do
@@ -1665,6 +1691,9 @@ defmodule GanttEx.Live.Gantt do
     end)
   end
 
+  defp current_task(_a, %{mode: :new, draft: draft}), do: draft
+  defp current_task(a, %{id: id}), do: Store.get_task(a.store, id)
+
   # Scalar meta fields are included so `:lightbox_fields` inputs get their values.
   defp lightbox_params(task, unit) do
     task.meta
@@ -1674,6 +1703,7 @@ defmodule GanttEx.Live.Gantt do
     end)
     |> Map.new(fn {key, value} -> {to_string(key), to_string(value)} end)
     |> Map.merge(TaskForm.params(task, unit))
+    |> Map.put("resources", Enum.map(task.resources || [], &Store.key(&1.id)))
   end
 
   # The draft end date is stale once the form sets a new start or duration.

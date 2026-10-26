@@ -29,6 +29,9 @@ defmodule GanttEx.Live.Columns do
       {"Owner name", 150, nil, true}
   """
 
+  # computed or multi-valued fields
+  @unsortable [:add, :wbs, :total_slack, :free_slack, :resources]
+
   @defaults [
     %{field: :text, tree: true, width: 220},
     %{field: :start_date, width: 104},
@@ -78,8 +81,7 @@ defmodule GanttEx.Live.Columns do
           align: Map.get(slot, :align) || align(field),
           tree: Map.get(slot, :tree, false),
           editor: Map.get(slot, :editor, editor(field)),
-          sortable:
-            Map.get(slot, :sortable, field not in [:add, :wbs, :total_slack, :free_slack]),
+          sortable: Map.get(slot, :sortable, field not in @unsortable),
           inner_block: Map.get(slot, :inner_block)
         })
       end)
@@ -110,6 +112,7 @@ defmodule GanttEx.Live.Columns do
   defp label(:constraint_type, labels), do: labels.constraint
   defp label(:total_slack, labels), do: labels.total_slack
   defp label(:planned_start, labels), do: labels.planned_start
+  defp label(:resources, labels), do: labels.resources
   defp label(:planned_end, labels), do: labels.planned_end
   defp label(:deadline, labels), do: labels.deadline
   defp label(:free_slack, labels), do: labels.free_slack
@@ -121,6 +124,7 @@ defmodule GanttEx.Live.Columns do
   defp width(:text), do: 220
   defp width(:add), do: 44
   defp width(:wbs), do: 64
+  defp width(:resources), do: 140
   defp width(:constraint_type), do: 150
   defp width(field) when field in [:duration, :progress], do: 76
   defp width(field) when field in [:total_slack, :free_slack], do: 96

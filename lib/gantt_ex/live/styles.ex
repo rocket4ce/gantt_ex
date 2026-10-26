@@ -1114,6 +1114,100 @@ defmodule GanttEx.Live.Styles do
         transform: rotate(45deg);
       }
 
+      .gx-resources {
+        border-top: 2px solid var(--gx-border);
+      }
+
+      .gx-resources-row {
+        display: flex;
+        height: var(--gx-row-height);
+        border-bottom: 1px solid var(--gx-line);
+      }
+
+      .gx-resources-row--head {
+        height: 28px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        color: var(--gx-muted);
+        background: var(--gx-surface);
+      }
+
+      .gx-resources-name {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        display: flex;
+        flex: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: var(--gx-grid-width);
+        padding: 0 12px;
+        background: inherit;
+        background-color: var(--gx-bg);
+        border-right: 1px solid var(--gx-border);
+      }
+
+      .gx-resources-row--head .gx-resources-name {
+        background-color: var(--gx-surface);
+      }
+
+      .gx-resources-capacity {
+        font-size: 11px;
+        color: var(--gx-muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .gx-resources-row--overloaded .gx-resources-name {
+        color: var(--gx-danger);
+        font-weight: 600;
+      }
+
+      .gx-resources-cells {
+        position: relative;
+        flex: none;
+      }
+
+      .gx-load {
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        overflow: hidden;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--gx-text);
+        background: linear-gradient(to top, var(--gx-accent-soft) var(--gx-load), transparent 0);
+        border-radius: 4px;
+      }
+
+      .gx-load--over {
+        color: var(--gx-danger);
+        background: linear-gradient(to top, var(--gx-danger-soft) var(--gx-load), transparent 0);
+        box-shadow: inset 0 -2px 0 var(--gx-danger);
+      }
+
+      .gx-checks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+      }
+
+      .gx-check {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+
+      .gx-check input {
+        accent-color: var(--gx-accent);
+      }
+
       .gx-row-marks {
         position: absolute;
         inset: 0;

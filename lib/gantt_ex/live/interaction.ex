@@ -198,10 +198,39 @@ defmodule GanttEx.Live.Interaction do
   @spec extra_params(map(), map()) :: map()
   def extra_params(params, meta) do
     params
-    |> Map.drop(~w(text type start_date duration progress parent))
+    |> Map.drop(
+      ~w(text type start_date duration progress parent resources) ++
+        ~w(constraint_type constraint_date planned_start planned_end deadline)
+    )
     |> Enum.reject(fn {key, _} -> String.starts_with?(key, "_") end)
     |> Map.new(fn {key, value} -> {meta_key(meta, key), value} end)
   end
+
+  @doc """
+  Returns the resource assignments chosen in the lightbox (`"resources"`, a
+  list of resource keys), keeping the values of existing assignments.
+  Returns `%{}` when the form has no resources field.
+
+      iex> resources = %{"ana" => GanttEx.Resource.new!(id: "ana"), "7" => GanttEx.Resource.new!(id: 7)}
+      iex> task = GanttEx.Task.new!(id: 1, resources: [%{id: "ana", value: 4}])
+      iex> GanttEx.Live.Interaction.resource_attrs(%{"resources" => ["", "ana", "7", "ghost"]}, resources, task)
+      %{resources: [%{id: "ana", value: 4}, %{id: 7, value: nil}]}
+      iex> GanttEx.Live.Interaction.resource_attrs(%{"text" => "A"}, resources, task)
+      %{}
+  """
+  @spec resource_attrs(map(), %{String.t() => GanttEx.Resource.t()}, map() | nil) :: map()
+  def resource_attrs(%{"resources" => keys}, resources, task) when is_list(keys) do
+    current = Map.new((task && Map.get(task, :resources)) || [], &{&1.id, &1})
+
+    assignments =
+      for key <- keys,
+          resource = Map.get(resources, key),
+          do: Map.get(current, resource.id, %{id: resource.id, value: nil})
+
+    %{resources: assignments}
+  end
+
+  def resource_attrs(_params, _resources, _task), do: %{}
 
   defp meta_key(meta, key) when is_binary(key) do
     Enum.find(Map.keys(meta), key, &(is_atom(&1) and Atom.to_string(&1) == key))
