@@ -624,13 +624,14 @@ defmodule GanttEx.Live.Components do
   def task_bar(assigns) do
     ~H"""
     <div
-      id={"#{@ctx.id}-bar-#{dom_key(@bar.key)}"}
+      id={"#{@ctx.id}-bar-#{dom_key(@bar.uid)}"}
       class={[
         "gx-bar",
         "gx-bar--#{@bar.kind}",
         @bar.selected && "gx-bar--selected",
         @bar.drag == "none" && "gx-bar--locked",
         @bar[:critical] && "gx-bar--critical",
+        @bar[:segment] && "gx-bar--segment",
         @bar[:deadline] && @bar.deadline.overdue && "gx-bar--overdue",
         @bar.class
       ]}
@@ -736,6 +737,25 @@ defmodule GanttEx.Live.Components do
         <dd>{@ctx.format.(@task.deadline, @ctx.date_pattern)}</dd>
       <% end %>
     </dl>
+    """
+  end
+
+  @doc "Renders the tasks rolled up on the rows of their ancestor projects."
+  attr :ctx, :map, required: true
+  attr :rollups, :list, required: true
+
+  def rollups(assigns) do
+    ~H"""
+    <div class="gx-rollups" aria-hidden="true">
+      <div
+        :for={rollup <- @rollups}
+        id={"#{@ctx.id}-#{dom_key(rollup.uid)}"}
+        class={["gx-rollup", "gx-rollup--#{rollup.kind}"]}
+        style={"left: #{px(rollup.x)}; top: #{px(rollup.y)}; width: #{px(rollup.width)}"}
+        title={rollup.task.text}
+      >
+      </div>
+    </div>
     """
   end
 

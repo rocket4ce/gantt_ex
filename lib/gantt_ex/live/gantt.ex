@@ -449,7 +449,9 @@ defmodule GanttEx.Live.Gantt do
         baselines: a.baselines
       )
 
-    bars = Enum.map(layout.bars, &decorate_bar(&1, Map.put(a, :timeline, timeline)))
+    bars =
+      Enum.map(layout.bars ++ layout.segments, &decorate_bar(&1, Map.put(a, :timeline, timeline)))
+
     columns = Columns.build(a.column, a.labels, widths: a.column_widths, readonly: a.readonly)
     grid_width = grid_width(a, columns)
     chart_height = max(layout.height, 0)
@@ -475,6 +477,7 @@ defmodule GanttEx.Live.Gantt do
       level: level,
       rows: rows,
       bars: bars,
+      rollups: layout.rollups,
       link_paths:
         Enum.map(layout.links, fn link ->
           Map.merge(link, %{
@@ -535,6 +538,7 @@ defmodule GanttEx.Live.Gantt do
       window: if(smart_rendering?(a.smart_rendering, count), do: "#{first}:#{last}:#{count}"),
       window_rows: Enum.slice(a.rows, first..last//1),
       window_bars: bars,
+      window_rollups: Enum.filter(a.rollups, &visible?.(&1.row)),
       window_links:
         Enum.filter(a.link_paths, fn link ->
           min(link.source_row, link.target_row) <= last and
@@ -850,10 +854,11 @@ defmodule GanttEx.Live.Gantt do
               <.highlights highlights={@highlights} />
               <.markers ctx={@ctx} markers={@marker_items} />
               <.row_marks ctx={@ctx} bars={@window_bars} />
+              <.rollups ctx={@ctx} rollups={@window_rollups} />
               <.links ctx={@ctx} links={@window_links} width={@chart_width} height={@chart_height} />
               <.task_bar
                 :for={bar <- @window_bars}
-                :key={bar.key}
+                :key={bar.uid}
                 ctx={@ctx}
                 bar={bar}
                 task_text={@task_text}

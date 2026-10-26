@@ -20,6 +20,8 @@ defmodule GanttEx.Task do
       auto-scheduling (see `GanttEx.Scheduler` and `constraint_types/0`).
     * `:planned_start`, `:planned_end` - the baseline (the original plan).
     * `:deadline` - the date the task must be finished by.
+    * `:render` - `:split` draws the children of the task on its own row.
+    * `:rollup` - also show the task on the rows of its ancestor projects.
     * `:meta` - any additional fields (for custom grid columns, templates, ...).
 
   Only one or two of `:start_date`, `:end_date` and `:duration` are needed: the
@@ -69,7 +71,9 @@ defmodule GanttEx.Task do
     :constraint_date,
     :planned_start,
     :planned_end,
-    :deadline
+    :deadline,
+    :render,
+    :rollup
   ]
 
   @aliases %{parent_id: :parent}
@@ -95,6 +99,8 @@ defmodule GanttEx.Task do
             planned_start: nil,
             planned_end: nil,
             deadline: nil,
+            render: nil,
+            rollup: false,
             meta: %{}
 
   @typedoc "A task or link identifier."
@@ -132,6 +138,8 @@ defmodule GanttEx.Task do
           planned_start: NaiveDateTime.t() | nil,
           planned_end: NaiveDateTime.t() | nil,
           deadline: NaiveDateTime.t() | nil,
+          render: :split | nil,
+          rollup: boolean(),
           meta: map()
         }
 
@@ -312,6 +320,10 @@ defmodule GanttEx.Task do
        do: Dates.cast(value)
 
   defp cast_field(:constraint_type, value), do: cast_constraint(value)
+  defp cast_field(:render, value) when value in [nil, ""], do: {:ok, nil}
+  defp cast_field(:render, value) when value in [:split, "split"], do: {:ok, :split}
+  defp cast_field(:render, _value), do: :error
+  defp cast_field(:rollup, value), do: cast_boolean(value)
   defp cast_field(:type, value), do: cast_type(value)
   defp cast_field(:parent, value), do: {:ok, cast_parent(value)}
   defp cast_field(:calendar_id, value), do: {:ok, if(value == "", do: nil, else: value)}

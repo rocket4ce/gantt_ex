@@ -1084,6 +1084,36 @@ defmodule GanttEx.Live.Styles do
         pointer-events: none;
       }
 
+      .gx-bar--segment .gx-bar-body {
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), var(--gx-shadow);
+      }
+
+      .gx-rollups {
+        position: absolute;
+        inset: 0;
+        z-index: 3;
+        pointer-events: none;
+      }
+
+      .gx-rollup {
+        position: absolute;
+        height: 6px;
+        margin-top: -3px;
+        background: var(--gx-bg);
+        border: 2px solid var(--gx-rollup, #f59e0b);
+        border-radius: 3px;
+      }
+
+      .gx-rollup--milestone {
+        width: 10px !important;
+        height: 10px;
+        margin: -5px 0 0 -5px;
+        background: var(--gx-rollup, #f59e0b);
+        border: 0;
+        border-radius: 2px;
+        transform: rotate(45deg);
+      }
+
       .gx-row-marks {
         position: absolute;
         inset: 0;

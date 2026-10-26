@@ -3,6 +3,11 @@ defmodule GanttEx.Layout do
   Computes the geometry of the chart: one bar per visible row and one path per
   visible link.
 
+  Tasks rendered with `render: :split` draw their children as *segments* on
+  their own row (and links reach the segments while the branch is collapsed),
+  and tasks with `rollup: true` also appear as *rollups* on the rows of
+  their ancestor projects.
+
   The layout is pure data, so it can be tested without rendering anything:
 
       iex> store = GanttEx.Store.new!(
@@ -39,7 +44,20 @@ defmodule GanttEx.Layout do
           width: float(),
           height: number(),
           progress: float(),
-          baseline: %{x: float(), y: float(), width: float()} | nil
+          baseline: %{x: float(), y: float(), width: float()} | nil,
+          uid: String.t(),
+          segment: boolean()
+        }
+
+  @typedoc "A task shown on the row of an ancestor project."
+  @type rollup :: %{
+          uid: String.t(),
+          task: Task.t(),
+          row: non_neg_integer(),
+          kind: Task.type(),
+          x: float(),
+          y: float(),
+          width: float()
         }
 
   @typedoc "A positioned link."
@@ -56,6 +74,8 @@ defmodule GanttEx.Layout do
 
   @type t :: %{
           bars: [bar()],
+          segments: [bar()],
+          rollups: [rollup()],
           bar_index: %{Store.key() => bar()},
           links: [link_path()],
           width: non_neg_integer(),
@@ -80,12 +100,25 @@ defmodule GanttEx.Layout do
     min_width = Keyword.get(opts, :min_bar_width, 6)
     baselines = Keyword.get(opts, :baselines, false)
 
-    bars =
-      Enum.map(rows, fn row ->
-        bar(row, timeline, row_height, bar_height, min_width, baselines)
-      end)
+    build_bar = fn row -> bar(row, timeline, row_height, bar_height, min_width, baselines) end
 
-    bar_index = Map.new(bars, &{&1.key, &1})
+    bars =
+      for row <- rows, row.task.render != :split, do: build_bar.(row)
+
+    segments =
+      for row <- rows,
+          row.task.render == :split,
+          child <- Store.children(store, row.task.id),
+          do: %{
+            build_bar.(%{row | task: child, key: Store.key(child.id)})
+            | uid: "split-" <> Store.key(child.id),
+              segment: true
+          }
+
+    bar_index =
+      bars
+      |> Map.new(&{&1.key, &1})
+      |> then(&Map.merge(Map.new(segments, fn s -> {s.key, s} end), &1))
 
     links =
       for link <- Store.links(store),
@@ -110,6 +143,8 @@ defmodule GanttEx.Layout do
 
     %{
       bars: bars,
+      segments: segments,
+      rollups: rollups(store, rows, timeline, row_height),
       bar_index: bar_index,
       links: links,
       width: Timeline.width(timeline),
@@ -141,8 +176,31 @@ defmodule GanttEx.Layout do
       width: width,
       height: bar_height,
       progress: task.progress,
-      baseline: baselines && baseline(task, timeline, y + bar_height + 2)
+      baseline: baselines && baseline(task, timeline, y + bar_height + 2),
+      uid: row.key,
+      segment: false
     }
+  end
+
+  defp rollups(store, rows, timeline, row_height) do
+    for row <- rows,
+        row.task.type == :project and row.has_children,
+        id <- Store.descendant_ids(store, row.task.id),
+        task = Store.get_task(store, id),
+        task.rollup do
+      x = Timeline.x(timeline, task.start_date)
+      width = if task.type == :milestone, do: 0, else: Timeline.x(timeline, task.end_date) - x
+
+      %{
+        uid: "rollup-#{row.key}-#{Store.key(id)}",
+        task: task,
+        row: row.index,
+        kind: task.type,
+        x: x,
+        y: row.index * row_height + row_height / 2,
+        width: width
+      }
+    end
   end
 
   defp baseline(
