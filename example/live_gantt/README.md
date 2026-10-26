@@ -1,18 +1,33 @@
 # LiveGantt
 
-To start your Phoenix server:
+A Phoenix application showing [GanttEx](../../README.md) backed by Postgres.
 
-* Run `mix setup` to install and setup dependencies
-* Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+```shell
+mix setup        # deps, database, seeds and assets
+mix phx.server   # http://localhost:4000
+```
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+`mix run priv/repo/seeds.exs` resets the sample "Website relaunch" project.
 
-Ready to run in production? Please [check our deployment guides](https://phoenix.hexdocs.pm/deployment.html).
+## Where to look
 
-## Learn more
+- `lib/live_gantt_web/live/gantt_live.ex` - the page: renders
+  `GanttEx.Live.Gantt` with custom columns and lightbox fields, and persists
+  every `{GanttEx, %GanttEx.Event{}}` it receives.
+- `lib/live_gantt/planning.ex` - `apply_event/1` maps each event to Ecto.
+- `lib/live_gantt/planning/task.ex` - a schema using the GanttEx field
+  names, so records are given to the chart as they are.
+- `assets/js/app.js` and `assets/css/app.css` - the two lines that install
+  the GanttEx hook and stylesheet.
 
-* Official website: https://www.phoenixframework.org/
-* Guides: https://phoenix.hexdocs.pm/overview.html
-* Docs: https://phoenix.hexdocs.pm
-* Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+## Troubleshooting
+
+**`GET /assets/css/app.css` returns 404 on macOS.** The standalone Tailwind
+binary may ship with an invalid code signature, and recent macOS versions
+kill it at startup (exit code 137), so the CSS is never built. Re-sign it
+and rebuild:
+
+```shell
+codesign --force --sign - _build/tailwind-macos-arm64-*
+mix tailwind live_gantt
+```

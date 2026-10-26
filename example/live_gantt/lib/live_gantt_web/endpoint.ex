@@ -32,6 +32,7 @@ defmodule LiveGanttWeb.Endpoint do
   if Mix.env() == :dev do
     plug Tidewave
   end
+
   if code_reloading? do
     socket "/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket
     plug Phoenix.LiveReloader

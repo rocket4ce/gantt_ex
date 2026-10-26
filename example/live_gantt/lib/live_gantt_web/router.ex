@@ -17,7 +17,7 @@ defmodule LiveGanttWeb.Router do
   scope "/", LiveGanttWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", GanttLive
   end
 
   # Other scopes may use custom stacks.

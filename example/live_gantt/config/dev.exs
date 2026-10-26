@@ -22,6 +22,8 @@ config :live_gantt, LiveGanttWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}],
   check_origin: false,
   code_reloader: true,
+  # Also recompile the GanttEx library (a path dependency) on code reload.
+  reloadable_apps: [:live_gantt, :gantt_ex],
   debug_errors: true,
   secret_key_base: "6bbtwhk0aHLQXi4XZSjAUWBOD5iDgiO/+DrlrDTltOUxnJN3NCcT+TfwdEWFUnTe",
   watchers: [

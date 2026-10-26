@@ -40,6 +40,7 @@ defmodule LiveGantt.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:gantt_ex, path: "../.."},
       {:tidewave, "~> 0.9", only: :dev},
       {:phoenix, "~> 1.8.9"},
       {:phoenix_ecto, "~> 4.5"},
