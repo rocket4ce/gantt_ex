@@ -15,6 +15,7 @@ defmodule GanttEx.Task do
     * `:open` - whether the children are expanded initially.
     * `:readonly` - disables editing for this task.
     * `:color`, `:text_color`, `:progress_color` - optional CSS colors.
+    * `:calendar_id` - the working-time calendar of the task (see `GanttEx.Calendar`).
     * `:meta` - any additional fields (for custom grid columns, templates, ...).
 
   Only one or two of `:start_date`, `:end_date` and `:duration` are needed: the
@@ -58,7 +59,8 @@ defmodule GanttEx.Task do
     :readonly,
     :color,
     :text_color,
-    :progress_color
+    :progress_color,
+    :calendar_id
   ]
 
   @aliases %{parent_id: :parent}
@@ -78,6 +80,7 @@ defmodule GanttEx.Task do
             color: nil,
             text_color: nil,
             progress_color: nil,
+            calendar_id: nil,
             meta: %{}
 
   @typedoc "A task or link identifier."
@@ -103,6 +106,7 @@ defmodule GanttEx.Task do
           color: String.t() | nil,
           text_color: String.t() | nil,
           progress_color: String.t() | nil,
+          calendar_id: term(),
           meta: map()
         }
 
@@ -241,6 +245,7 @@ defmodule GanttEx.Task do
   defp cast_field(key, value) when key in [:start_date, :end_date], do: Dates.cast(value)
   defp cast_field(:type, value), do: cast_type(value)
   defp cast_field(:parent, value), do: {:ok, cast_parent(value)}
+  defp cast_field(:calendar_id, value), do: {:ok, if(value == "", do: nil, else: value)}
   defp cast_field(:duration, value), do: cast_duration(value)
   defp cast_field(:progress, value), do: cast_progress(value)
   defp cast_field(key, value) when key in [:open, :readonly], do: cast_boolean(value)

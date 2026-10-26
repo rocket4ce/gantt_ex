@@ -32,7 +32,7 @@ defmodule GanttEx.Store do
       ~N[2025-01-18 00:00:00]
   """
 
-  alias GanttEx.{Dates, Link, Task}
+  alias GanttEx.{Calendar, Dates, Link, Task}
 
   defstruct tasks: %{},
             links: %{},
@@ -40,7 +40,10 @@ defmodule GanttEx.Store do
             children: %{nil => []},
             task_keys: %{},
             link_keys: %{},
-            duration_unit: :day
+            duration_unit: :day,
+            work_time: false,
+            calendar: nil,
+            calendars: %{}
 
   @typedoc "A string version of an id, as used in the DOM and in client events."
   @type key :: String.t()
@@ -80,7 +83,10 @@ defmodule GanttEx.Store do
           children: %{(Task.id() | nil) => [Task.id()]},
           task_keys: %{key() => Task.id()},
           link_keys: %{key() => Task.id()},
-          duration_unit: Dates.unit()
+          duration_unit: Dates.unit(),
+          work_time: boolean(),
+          calendar: Calendar.t() | nil,
+          calendars: %{term() => Calendar.t()}
         }
 
   @typedoc "A visible row, as returned by `rows/2`."
@@ -105,6 +111,11 @@ defmodule GanttEx.Store do
   ## Options
 
     * `:duration_unit` - unit of `:duration` and `:lag` values. Defaults to `:day`.
+    * `:work_time` - count only working time in durations (see `GanttEx.Calendar`).
+      Defaults to `false`.
+    * `:calendar` - the global calendar (a `GanttEx.Calendar` or its options).
+      Defaults to Monday to Friday, 08:00-12:00 and 13:00-17:00.
+    * `:calendars` - other calendars, referenced by the `:calendar_id` of tasks.
 
   Dates are completed as follows: when both `:start_date` and `:end_date` are
   given the duration is computed (the end date wins over a given duration);
@@ -123,24 +134,30 @@ defmodule GanttEx.Store do
 
       iex> GanttEx.Store.new([%{id: 1, text: "Undated"}])
       {:error, {:invalid_task, 1, {:missing, :start_date}}}
+
+  With working time, a 2-day task starting on Friday ends on Tuesday, and a
+  task starting on a weekend starts on Monday:
+
+      iex> {:ok, store} = GanttEx.Store.new([%{id: 1, start_date: ~D[2025-01-10], duration: 2}, %{id: 2, start_date: ~D[2025-01-11], duration: 1}], [], work_time: true)
+      iex> {GanttEx.Store.get_task(store, 1).end_date, GanttEx.Store.get_task(store, 2).start_date}
+      {~N[2025-01-14 00:00:00], ~N[2025-01-13 00:00:00]}
   """
   @spec new([term()], [term()], keyword()) :: {:ok, t()} | {:error, error()}
   def new(tasks \\ [], links \\ [], opts \\ []) do
-    unit = Keyword.get(opts, :duration_unit, :day)
-
-    with {:ok, tasks} <- cast_all(tasks, &Task.new/1, :task),
+    with {:ok, base} <- base_store(opts),
+         {:ok, tasks} <- cast_all(tasks, &Task.new/1, :task),
          {:ok, links} <- cast_all(links, &Link.new/1, :link),
          :ok <- unique_ids(tasks, :task),
          :ok <- unique_ids(links, :link),
-         {:ok, tasks} <- schedule_all(tasks, unit) do
+         {:ok, tasks} <- schedule_all(tasks, base) do
       task_map = Map.new(tasks, &{&1.id, &1})
       {task_map, children} = build_tree(tasks, task_map)
 
-      store = %__MODULE__{
-        tasks: task_map,
-        children: children,
-        task_keys: Map.new(tasks, &{key(&1.id), &1.id}),
-        duration_unit: unit
+      store = %{
+        base
+        | tasks: task_map,
+          children: children,
+          task_keys: Map.new(tasks, &{key(&1.id), &1.id})
       }
 
       with :ok <- check_reachable(store) do
@@ -194,9 +211,36 @@ defmodule GanttEx.Store do
     end
   end
 
-  defp schedule_all(tasks, unit) do
+  defp base_store(opts) do
+    work_time = Keyword.get(opts, :work_time, false)
+
+    with {:ok, calendar} <- Calendar.new(Keyword.get(opts, :calendar) || []),
+         {:ok, calendars} <- cast_calendars(Keyword.get(opts, :calendars, [])) do
+      {:ok,
+       %__MODULE__{
+         duration_unit: Keyword.get(opts, :duration_unit, :day),
+         work_time: work_time,
+         calendar: if(work_time, do: calendar),
+         calendars: calendars
+       }}
+    end
+  end
+
+  defp cast_calendars(calendars) when is_map(calendars),
+    do: calendars |> Map.values() |> cast_calendars()
+
+  defp cast_calendars(calendars) do
+    Enum.reduce_while(calendars, {:ok, %{}}, fn calendar, {:ok, acc} ->
+      case Calendar.new(calendar) do
+        {:ok, calendar} -> {:cont, {:ok, Map.put(acc, calendar.id, calendar)}}
+        {:error, reason} -> {:halt, {:error, {:invalid_calendar, reason}}}
+      end
+    end)
+  end
+
+  defp schedule_all(tasks, store) do
     Enum.reduce_while(tasks, {:ok, []}, fn task, {:ok, acc} ->
-      case schedule(task, unit) do
+      case schedule(task, store.duration_unit, [], calendar_for(store, task)) do
         {:ok, task} -> {:cont, {:ok, [task | acc]}}
         {:error, reason} -> {:halt, {:error, {:invalid_task, task.id, reason}}}
       end
@@ -258,16 +302,23 @@ defmodule GanttEx.Store do
       iex> GanttEx.Store.schedule(task, :day)
       {:error, {:invalid, :end_date}}
   """
-  @spec schedule(Task.t(), Dates.unit(), [atom()]) :: {:ok, Task.t()} | {:error, Task.error()}
-  def schedule(task, unit, changed \\ [])
+  @spec schedule(Task.t(), Dates.unit(), [atom()], Calendar.t() | nil) ::
+          {:ok, Task.t()} | {:error, Task.error()}
+  def schedule(task, unit, changed \\ [], calendar \\ nil)
 
-  def schedule(%Task{type: :milestone} = task, _unit, _changed) do
-    start = task.start_date || task.end_date
+  def schedule(%Task{type: :milestone} = task, unit, _changed, calendar) do
+    start = snap_start(task.start_date || task.end_date, unit, calendar)
     {:ok, %{task | start_date: start, end_date: start, duration: 0}}
   end
 
-  def schedule(%Task{} = task, unit, changed) do
+  def schedule(%Task{} = task, unit, changed, calendar) do
     %Task{start_date: start, end_date: finish, duration: duration} = task
+    add = fn datetime, amount -> add_time(calendar, datetime, amount, unit) end
+
+    start =
+      if :end_date in changed and :start_date not in changed,
+        do: start,
+        else: snap_start(start, unit, calendar)
 
     {start, finish, duration} =
       cond do
@@ -275,17 +326,17 @@ defmodule GanttEx.Store do
           {nil, nil, duration}
 
         is_nil(start) ->
-          {Dates.add(finish, -(duration || 1), unit), finish, duration || 1}
+          {add.(finish, -(duration || 1)), finish, duration || 1}
 
         is_nil(finish) or (:duration in changed and :end_date not in changed) ->
           duration = duration || 1
-          {start, Dates.add(start, duration, unit), duration}
+          {start, add.(start, duration), duration}
 
         :start_date in changed and :end_date not in changed and not is_nil(duration) ->
-          {start, Dates.add(start, duration, unit), duration}
+          {start, add.(start, duration), duration}
 
         true ->
-          {start, finish, Dates.diff(start, finish, unit)}
+          {start, finish, diff_time(calendar, start, finish, unit)}
       end
 
     if start && NaiveDateTime.compare(finish, start) == :lt do
@@ -294,6 +345,53 @@ defmodule GanttEx.Store do
       {:ok, %{task | start_date: start, end_date: finish, duration: duration && max(duration, 0)}}
     end
   end
+
+  defp snap_start(nil, _unit, _calendar), do: nil
+  defp snap_start(start, _unit, nil), do: start
+  defp snap_start(start, unit, calendar), do: Calendar.next_working(calendar, start, unit)
+
+  defp add_time(nil, datetime, amount, unit), do: Dates.add(datetime, amount, unit)
+
+  defp add_time(calendar, datetime, amount, unit),
+    do: Calendar.add(calendar, datetime, amount, unit)
+
+  defp diff_time(nil, from, to, unit), do: Dates.diff(from, to, unit)
+  defp diff_time(calendar, from, to, unit), do: Calendar.diff(calendar, from, to, unit)
+
+  @doc """
+  Returns the calendar that applies to `task` (its `:calendar_id`, or the
+  global calendar), or `nil` when the store does not use working time.
+  """
+  @spec calendar_for(t(), Task.t() | nil) :: Calendar.t() | nil
+  def calendar_for(%__MODULE__{work_time: false}, _task), do: nil
+  def calendar_for(%__MODULE__{} = store, nil), do: store.calendar
+
+  def calendar_for(%__MODULE__{} = store, %Task{calendar_id: id}),
+    do: Map.get(store.calendars, id) || store.calendar
+
+  @doc """
+  Adds `amount` duration units to `datetime` for `task`, honoring its calendar.
+
+      iex> store = GanttEx.Store.new!([], [], work_time: true)
+      iex> GanttEx.Store.add_duration(store, nil, ~N[2025-01-10 00:00:00], 1)
+      ~N[2025-01-11 00:00:00]
+      iex> GanttEx.Store.add_duration(store, nil, ~N[2025-01-10 00:00:00], 2)
+      ~N[2025-01-14 00:00:00]
+  """
+  @spec add_duration(t(), Task.t() | nil, NaiveDateTime.t(), number()) :: NaiveDateTime.t()
+  def add_duration(%__MODULE__{} = store, task, datetime, amount),
+    do: add_time(calendar_for(store, task), datetime, amount, store.duration_unit)
+
+  @doc """
+  Returns the duration between two datetimes for `task`, honoring its calendar.
+
+      iex> store = GanttEx.Store.new!([], [], work_time: true)
+      iex> GanttEx.Store.duration_between(store, nil, ~N[2025-01-10 00:00:00], ~N[2025-01-14 00:00:00])
+      2
+  """
+  @spec duration_between(t(), Task.t() | nil, NaiveDateTime.t(), NaiveDateTime.t()) :: integer()
+  def duration_between(%__MODULE__{} = store, task, from, to),
+    do: diff_time(calendar_for(store, task), from, to, store.duration_unit)
 
   defp rollup_all(store) do
     Enum.reduce(post_order(store, nil), store, fn id, store -> rollup_one(store, id) end)
@@ -311,7 +409,7 @@ defmodule GanttEx.Store do
         children = Enum.map(ids, &Map.fetch!(store.tasks, &1))
         start = children |> Enum.map(& &1.start_date) |> Enum.reduce(nil, &Dates.min/2)
         finish = children |> Enum.map(& &1.end_date) |> Enum.reduce(nil, &Dates.max/2)
-        duration = if start && finish, do: Dates.diff(start, finish, store.duration_unit)
+        duration = if start && finish, do: duration_between(store, task, start, finish)
 
         put_in(store.tasks[id], %{task | start_date: start, end_date: finish, duration: duration})
 
@@ -628,7 +726,7 @@ defmodule GanttEx.Store do
     with {:ok, task} <- Task.new(attrs),
          :ok <- check_new_id(store.tasks, task.id, :task),
          :ok <- check_parent_exists(store, task.parent),
-         {:ok, task} <- schedule(task, store.duration_unit) do
+         {:ok, task} <- schedule(task, store.duration_unit, [], calendar_for(store, task)) do
       store = %{
         store
         | tasks: Map.put(store.tasks, task.id, task),
@@ -668,7 +766,8 @@ defmodule GanttEx.Store do
 
     with {:ok, old} <- fetch(store.tasks, id),
          {:ok, changed} <- Task.change(old, Map.delete(known, :parent) |> merge_meta(attrs)),
-         {:ok, changed} <- schedule(changed, store.duration_unit, Map.keys(known)) do
+         {:ok, changed} <-
+           schedule(changed, store.duration_unit, Map.keys(known), calendar_for(store, changed)) do
       store = put_in(store.tasks[id], changed)
 
       {store, move_changes} =

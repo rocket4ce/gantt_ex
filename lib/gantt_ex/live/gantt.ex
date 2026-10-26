@@ -38,6 +38,10 @@ defmodule GanttEx.Live.Gantt do
     * `:tasks` - list of tasks (maps, keyword lists or structs, see `GanttEx.Task`).
     * `:links` - list of links (see `GanttEx.Link`).
     * `:duration_unit` - unit of durations and lags. Defaults to `:day`.
+    * `:work_time` - durations count only working time. Defaults to `false`.
+    * `:calendar` - the global working calendar: a `GanttEx.Calendar` or its
+      options (`work_days`, `hours`, `holidays`, `working_dates`).
+    * `:calendars` - more calendars, referenced by the `:calendar_id` of tasks.
 
   Behaviour:
 
@@ -162,6 +166,9 @@ defmodule GanttEx.Live.Gantt do
     links_editable: true,
     export_formats: [:json, :csv, :ical, :ms_project, :svg, :png],
     smart_rendering: :auto,
+    work_time: false,
+    calendar: nil,
+    calendars: [],
     export_filename: "gantt",
     theme: "auto",
     class: nil,
@@ -263,15 +270,23 @@ defmodule GanttEx.Live.Gantt do
   end
 
   defp load_data(socket, assigns) do
-    {old_tasks, old_links, _unit} = socket.assigns.data_source || {[], [], nil}
+    {old_tasks, old_links, _opts} = socket.assigns.data_source || {[], [], nil}
     tasks = Map.get(assigns, :tasks, old_tasks)
     links = Map.get(assigns, :links, old_links)
-    source = {tasks, links, socket.assigns.duration_unit}
+
+    store_opts = [
+      duration_unit: socket.assigns.duration_unit,
+      work_time: socket.assigns.work_time,
+      calendar: socket.assigns.calendar,
+      calendars: socket.assigns.calendars
+    ]
+
+    source = {tasks, links, store_opts}
 
     if source == socket.assigns.data_source do
       socket
     else
-      store = Store.new!(tasks, links, duration_unit: socket.assigns.duration_unit)
+      store = Store.new!(tasks, links, store_opts)
 
       socket
       |> sync_ui_state(socket.assigns.store, store)
@@ -360,7 +375,7 @@ defmodule GanttEx.Live.Gantt do
   end
 
   defp handle_action(socket, :reload) do
-    {tasks, links, _unit} = socket.assigns.data_source || {[], [], nil}
+    {tasks, links, _opts} = socket.assigns.data_source || {[], [], nil}
     socket |> assign(:data_source, nil) |> load_data(%{tasks: tasks, links: links})
   end
 
@@ -388,14 +403,14 @@ defmodule GanttEx.Live.Gantt do
     chart_height = max(layout.height, 0)
 
     socket =
-      if timeline == a.timeline and a.labels_locale == a[:scale_locale] do
+      if {timeline, a.labels_locale, a.store.calendar, a.weekend} == a[:scale_key] do
         socket
       else
         assign(socket,
           timeline: timeline,
-          scale_locale: a.labels_locale,
+          scale_key: {timeline, a.labels_locale, a.store.calendar, a.weekend},
           scale_rows: scale_rows(timeline, a, today),
-          highlights: highlights(timeline, a.weekend)
+          highlights: highlights(timeline, a)
         )
       end
 
@@ -518,8 +533,8 @@ defmodule GanttEx.Live.Gantt do
       |> Timeline.cells(scale, a.format)
       |> Enum.map(fn cell ->
         classes = [
-          scale == minor and scale.unit in [:hour, :day] and
-            Date.day_of_week(cell.start) in a.weekend and "gx-scale-cell--weekend",
+          scale == minor and scale.unit in [:hour, :day] and non_working?(a, cell.start) and
+            "gx-scale-cell--weekend",
           scale.unit in [:hour, :day, :week, :month] and
             NaiveDateTime.compare(cell.start, today) != :gt and
             NaiveDateTime.compare(today, cell.end) == :lt and "gx-scale-cell--today",
@@ -531,15 +546,21 @@ defmodule GanttEx.Live.Gantt do
     end
   end
 
-  defp highlights(timeline, weekend) do
+  # Weekends, or the non-working days of the global calendar with working time.
+  defp non_working?(%{store: %Store{work_time: true, calendar: calendar}}, date),
+    do: not GanttEx.Calendar.working_day?(calendar, date)
+
+  defp non_working?(a, date), do: Date.day_of_week(date) in a.weekend
+
+  defp highlights(timeline, a) do
     minor = List.last(timeline.scales)
 
-    if minor.unit in [:minute, :hour, :day] and weekend != [] do
+    if minor.unit in [:minute, :hour, :day] and (a.weekend != [] or a.store.work_time) do
       timeline.start_date
       |> Dates.floor(:day)
       |> Stream.iterate(&Dates.add(&1, 1, :day))
       |> Stream.take_while(&(NaiveDateTime.compare(&1, timeline.end_date) == :lt))
-      |> Enum.filter(&(Date.day_of_week(&1) in weekend))
+      |> Enum.filter(&non_working?(a, &1))
       |> Enum.map(fn day ->
         x = Timeline.x(timeline, Dates.max(day, timeline.start_date))
         %{x: x, width: Timeline.x(timeline, Dates.add(day, 1, :day)) - x}
