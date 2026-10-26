@@ -366,6 +366,12 @@ defmodule GanttEx.Live.Components do
     """
   end
 
+  defp cell_content(%{column: %{field: :wbs, inner_block: nil}} = assigns) do
+    ~H"""
+    <span class="gx-truncate gx-wbs">{@row.wbs}</span>
+    """
+  end
+
   defp cell_content(assigns) do
     ~H"""
     <span class="gx-truncate">

@@ -661,6 +661,11 @@ defmodule GanttEx.Live.Styles do
         pointer-events: none;
       }
 
+      .gx-wbs {
+        font-variant-numeric: tabular-nums;
+        color: var(--gx-muted);
+      }
+
       .gx-empty {
         padding: 32px 16px;
         color: var(--gx-muted);

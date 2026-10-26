@@ -296,7 +296,7 @@ defmodule GanttEx.Export do
     tasks = Store.tasks(store)
     uids = tasks |> Enum.with_index(1) |> Map.new(fn {task, uid} -> {task.id, uid} end)
     predecessors = Enum.group_by(Store.links(store), & &1.target)
-    outline = outline_numbers(store)
+    outline = Store.wbs_codes(store)
 
     task_xml =
       Enum.map_join(tasks, "", fn task ->
@@ -577,19 +577,6 @@ defmodule GanttEx.Export do
   end
 
   defp n(value), do: LinkPath.format_number(value)
-
-  defp outline_numbers(store, parent \\ nil, prefix \\ "") do
-    store
-    |> Store.child_ids(parent)
-    |> Enum.with_index(1)
-    |> Enum.reduce(%{}, fn {id, index}, acc ->
-      number = prefix <> Integer.to_string(index)
-
-      acc
-      |> Map.put(id, number)
-      |> Map.merge(outline_numbers(store, id, number <> "."))
-    end)
-  end
 
   # MSPDI link types: 0 = FF, 1 = FS, 2 = SF, 3 = SS
   defp ms_link_type(:finish_to_finish), do: 0

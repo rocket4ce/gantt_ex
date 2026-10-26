@@ -116,6 +116,7 @@ defmodule GanttEx.I18n do
         duration: gettext("Duration"),
         progress: gettext("Progress"),
         type: gettext("Type"),
+        wbs: gettext("WBS"),
         add_task: gettext("Add task"),
         add_subtask: gettext("Add subtask"),
         expand: gettext("Expand"),

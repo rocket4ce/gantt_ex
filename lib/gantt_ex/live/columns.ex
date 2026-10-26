@@ -13,6 +13,7 @@ defmodule GanttEx.Live.Columns do
   | `:duration`   | Duration      | `:number`   |
   | `:progress`   | Progress      | `:progress` |
   | `:type`       | Type          | `:type`     |
+  | `:wbs`        | WBS           | none        |
   | `:add`        | (add button)  | none        |
 
   Any other field is read from the task `:meta` and is not editable unless an
@@ -77,7 +78,7 @@ defmodule GanttEx.Live.Columns do
           align: Map.get(slot, :align) || align(field),
           tree: Map.get(slot, :tree, false),
           editor: Map.get(slot, :editor, editor(field)),
-          sortable: Map.get(slot, :sortable, field != :add),
+          sortable: Map.get(slot, :sortable, field not in [:add, :wbs]),
           inner_block: Map.get(slot, :inner_block)
         })
       end)
@@ -104,6 +105,7 @@ defmodule GanttEx.Live.Columns do
   defp label(:duration, labels), do: labels.duration
   defp label(:progress, labels), do: labels.progress
   defp label(:type, labels), do: labels.type
+  defp label(:wbs, labels), do: labels.wbs
   defp label(:add, _labels), do: ""
 
   defp label(field, _labels),
@@ -111,6 +113,7 @@ defmodule GanttEx.Live.Columns do
 
   defp width(:text), do: 220
   defp width(:add), do: 44
+  defp width(:wbs), do: 64
   defp width(field) when field in [:duration, :progress], do: 76
   defp width(_field), do: 104
 

@@ -97,7 +97,8 @@ defmodule GanttEx.Store do
           level: non_neg_integer(),
           parent_key: key() | nil,
           has_children: boolean(),
-          open: boolean()
+          open: boolean(),
+          wbs: String.t()
         }
 
   @date_fields [:start_date, :end_date, :duration]
@@ -637,7 +638,8 @@ defmodule GanttEx.Store do
       store: store,
       visible: visible,
       collapsed: collapsed,
-      sort: Keyword.get(opts, :sort)
+      sort: Keyword.get(opts, :sort),
+      wbs: wbs_codes(store)
     }
 
     {rows, _index} = walk_rows(ctx, nil, nil, 0, {[], 0})
@@ -663,12 +665,36 @@ defmodule GanttEx.Store do
           level: level,
           parent_key: parent_key,
           has_children: has_children,
-          open: open
+          open: open,
+          wbs: Map.fetch!(ctx.wbs, task.id)
         }
 
         acc = {[row | rows], index + 1}
         if open, do: walk_rows(ctx, task.id, key, level + 1, acc), else: acc
       end
+    end)
+  end
+
+  @doc """
+  Returns the WBS code (outline number) of every task, such as `"1.2.3"`.
+
+  Codes follow the order of the tree, whatever the sorting or filtering of
+  the rows.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, parent: 1, start_date: ~D[2025-01-01]}, %{id: 3, parent: 1, start_date: ~D[2025-01-01]}, %{id: 4, start_date: ~D[2025-01-01]}])
+      iex> GanttEx.Store.wbs_codes(store)
+      %{1 => "1", 2 => "1.1", 3 => "1.2", 4 => "2"}
+  """
+  @spec wbs_codes(t()) :: %{Task.id() => String.t()}
+  def wbs_codes(%__MODULE__{} = store), do: wbs_codes(store, nil, "")
+
+  defp wbs_codes(store, parent, prefix) do
+    store
+    |> child_ids(parent)
+    |> Enum.with_index(1)
+    |> Enum.reduce(%{}, fn {id, index}, acc ->
+      code = prefix <> Integer.to_string(index)
+      acc |> Map.put(id, code) |> Map.merge(wbs_codes(store, id, code <> "."))
     end)
   end
 
