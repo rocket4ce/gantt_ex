@@ -5,6 +5,7 @@ defmodule GanttEx.DoctestTest do
   doctest GanttEx.Dates
   doctest GanttEx.Calendar
   doctest GanttEx.Marker
+  doctest GanttEx.History
   doctest GanttEx.Task
   doctest GanttEx.Link
   doctest GanttEx.Store

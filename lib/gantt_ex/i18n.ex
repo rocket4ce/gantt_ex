@@ -155,6 +155,8 @@ defmodule GanttEx.I18n do
         yes: gettext("Yes"),
         no: gettext("No"),
         # toolbar
+        undo: gettext("Undo"),
+        redo: gettext("Redo"),
         zoom: gettext("Zoom"),
         zoom_in: gettext("Zoom in"),
         zoom_out: gettext("Zoom out"),

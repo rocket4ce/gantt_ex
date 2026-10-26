@@ -38,6 +38,17 @@ defmodule LiveGantt.PlanningTest do
     assert parent_id == project.id
   end
 
+  test "restored tasks and links keep their ids", %{project: project, design: design, link: link} do
+    task = gantt_task(design)
+    gantt_link = gantt_link(link)
+    :ok = Planning.apply_event(%Event{type: :task_deleted, task: task})
+
+    assert :ok = Planning.apply_event(%Event{type: :task_created, task: %{task | parent: project.id}})
+    assert :ok = Planning.apply_event(%Event{type: :link_created, link: gantt_link})
+    assert Repo.get(Task, design.id)
+    assert Repo.get(Link, link.id)
+  end
+
   test "persists only the changed fields", %{design: design} do
     task = gantt_task(design)
 

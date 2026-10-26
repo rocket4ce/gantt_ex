@@ -34,6 +34,9 @@ defmodule GanttEx.Live.Components do
   attr :levels, :list, required: true
   attr :export_formats, :list, default: []
   attr :can_add, :boolean, default: true
+  attr :show_history, :boolean, default: false
+  attr :can_undo, :boolean, default: false
+  attr :can_redo, :boolean, default: false
   slot :inner_block
 
   def toolbar(assigns) do
@@ -57,6 +60,33 @@ defmodule GanttEx.Live.Components do
         <.icon name={:plus} />
         <span>{@ctx.labels.add_task}</span>
       </button>
+
+      <div :if={@show_history} class="gx-toolbar-group">
+        <button
+          id={"#{@ctx.id}-undo"}
+          type="button"
+          class="gx-btn gx-btn--icon"
+          title={@ctx.labels.undo}
+          aria-label={@ctx.labels.undo}
+          disabled={not @can_undo}
+          phx-click="undo"
+          phx-target={@ctx.myself}
+        >
+          <.icon name={:undo} />
+        </button>
+        <button
+          id={"#{@ctx.id}-redo"}
+          type="button"
+          class="gx-btn gx-btn--icon"
+          title={@ctx.labels.redo}
+          aria-label={@ctx.labels.redo}
+          disabled={not @can_redo}
+          phx-click="redo"
+          phx-target={@ctx.myself}
+        >
+          <.icon name={:redo} />
+        </button>
+      </div>
 
       <div class="gx-toolbar-group">
         <button

@@ -1055,6 +1055,97 @@ defmodule GanttEx.Store do
     end
   end
 
+  # -- diffing -----------------------------------------------------------------
+
+  @doc """
+  Returns the changes that turn `old` into `new`, in an order that can be
+  applied to a database: deleted links, deleted tasks (deepest first),
+  created tasks (parents first), updated tasks, moved tasks, created links
+  and updated links.
+
+  `GanttEx.History` uses it to report what undo and redo change.
+
+      iex> old = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, start_date: ~D[2025-01-02]}], [%{id: 1, source: 1, target: 2}])
+      iex> {:ok, new, _} = GanttEx.Store.delete_task(old, 2)
+      iex> new |> GanttEx.Store.diff(old) |> Enum.map(fn {type, entity, _} -> {type, entity.id} end)
+      [task_created: 2, link_created: 1]
+      iex> old |> GanttEx.Store.diff(new) |> Enum.map(fn {type, entity, _} -> {type, entity.id} end)
+      [link_deleted: 1, task_deleted: 2]
+  """
+  @spec diff(t(), t()) :: [change()]
+  def diff(%__MODULE__{} = old, %__MODULE__{} = new) do
+    deleted_tasks =
+      old.tasks
+      |> Map.values()
+      |> Enum.reject(&Map.has_key?(new.tasks, &1.id))
+      |> Enum.sort_by(&(-level(old, &1.id)))
+      |> Enum.map(&{:task_deleted, &1, %{}})
+
+    created_tasks =
+      new
+      |> tasks()
+      |> Enum.reject(&Map.has_key?(old.tasks, &1.id))
+      |> Enum.map(&{:task_created, &1, %{}})
+
+    common = new |> tasks() |> Enum.filter(&Map.has_key?(old.tasks, &1.id))
+
+    updated_tasks =
+      for task <- common,
+          before = Map.fetch!(old.tasks, task.id),
+          changes = field_changes(before, %{task | parent: before.parent}, nil),
+          changes != %{},
+          do: {:task_updated, task, %{changes: changes}}
+
+    {deleted_links, created_links, updated_links} = diff_links(old, new)
+
+    deleted_links ++
+      deleted_tasks ++
+      created_tasks ++
+      updated_tasks ++ moved_tasks(old, new, common) ++ created_links ++ updated_links
+  end
+
+  # A task moved when its parent changed; a reordered branch reports its first
+  # out-of-place task (the siblings list carries the whole new order).
+  defp moved_tasks(old, new, common) do
+    reparented =
+      for task <- common, Map.fetch!(old.tasks, task.id).parent != task.parent, do: task.id
+
+    reordered =
+      for {parent, ids} <- new.children,
+          old_ids = child_ids(old, parent),
+          Enum.sort(ids) == Enum.sort(old_ids) and ids != old_ids,
+          id = ids |> Enum.zip(old_ids) |> Enum.find_value(fn {a, b} -> if a != b, do: a end),
+          do: id
+
+    (reparented ++ reordered)
+    |> Enum.uniq()
+    |> Enum.map(fn id ->
+      task = Map.fetch!(new.tasks, id)
+      siblings = child_ids(new, task.parent)
+
+      {:task_moved, task,
+       %{parent: task.parent, index: Enum.find_index(siblings, &(&1 == id)), siblings: siblings}}
+    end)
+  end
+
+  defp diff_links(old, new) do
+    deleted =
+      for link <- links(old), not Map.has_key?(new.links, link.id), do: {:link_deleted, link, %{}}
+
+    created =
+      for link <- links(new), not Map.has_key?(old.links, link.id), do: {:link_created, link, %{}}
+
+    updated =
+      for link <- links(new),
+          before = Map.get(old.links, link.id),
+          before,
+          changes = field_changes(before, link, nil),
+          changes != %{},
+          do: {:link_updated, link, %{changes: changes}}
+
+    {deleted, created, updated}
+  end
+
   # -- serialization -----------------------------------------------------------
 
   @doc """

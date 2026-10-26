@@ -13,6 +13,7 @@ defmodule GanttEx.Live.Hook do
     * dragging on the timeline to create a task, or to pan the chart
     * resizing grid columns and the grid itself
     * double click to open the lightbox
+    * undo / redo keyboard shortcuts (they need modifier keys)
     * fullscreen, print, scrolling and file downloads requested by the server
       (PNG images are rasterized from the server-rendered SVG)
     * reporting the visible area for smart rendering
@@ -57,11 +58,22 @@ defmodule GanttEx.Live.Hook do
               this.suppressClick = false
             }
           }
+          // Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y): phx-keydown has no modifiers.
+          this.onKeyDown = (e) => {
+            if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+            if (e.target.closest("input, select, textarea, [contenteditable]")) return
+            const key = e.key.toLowerCase()
+            const event = key === "z" ? (e.shiftKey ? "redo" : "undo") : key === "y" ? "redo" : null
+            if (!event) return
+            e.preventDefault()
+            this.push(event, {})
+          }
           this.onFullscreen = () => this.toggleFullscreen()
           this.onPrint = () => window.print()
 
           this.el.addEventListener("pointerdown", this.onPointerDown)
           this.el.addEventListener("dblclick", this.onDblClick)
+          this.el.addEventListener("keydown", this.onKeyDown)
           this.el.addEventListener("click", this.onClickCapture, true)
           this.el.addEventListener("gantt_ex:fullscreen", this.onFullscreen)
           this.el.addEventListener("gantt_ex:print", this.onPrint)

@@ -23,13 +23,22 @@ defmodule LiveGantt.Planning do
   end
 
   @doc "Creates a task."
-  def create_task(attrs) do
-    %Task{} |> Task.changeset(attrs) |> Repo.insert()
+  def create_task(attrs, id \\ nil) do
+    %Task{id: uuid(id)} |> Task.changeset(attrs) |> Repo.insert()
   end
 
   @doc "Creates a link."
-  def create_link(attrs) do
-    %Link{} |> Link.changeset(attrs) |> Repo.insert()
+  def create_link(attrs, id \\ nil) do
+    %Link{id: uuid(id)} |> Link.changeset(attrs) |> Repo.insert()
+  end
+
+  # New tasks come with temporary ids ("gx-..."), but undoing a deletion
+  # brings records back with their original UUID, which links reference.
+  defp uuid(id) do
+    case id && Ecto.UUID.cast(id) do
+      {:ok, uuid} -> uuid
+      _ -> nil
+    end
   end
 
   @doc "Deletes every task and link."
@@ -47,7 +56,7 @@ defmodule LiveGantt.Planning do
     |> Map.from_struct()
     |> task_attrs()
     |> Map.put(:position, next_position(task.parent))
-    |> create_task()
+    |> create_task(task.id)
     |> result()
   end
 
@@ -79,7 +88,8 @@ defmodule LiveGantt.Planning do
   end
 
   def apply_event(%Event{type: :link_created, link: link}) do
-    create_link(%{source_id: link.source, target_id: link.target, type: link.type, lag: link.lag})
+    %{source_id: link.source, target_id: link.target, type: link.type, lag: link.lag}
+    |> create_link(link.id)
     |> result()
   end
 

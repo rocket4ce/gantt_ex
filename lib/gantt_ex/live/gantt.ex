@@ -54,6 +54,9 @@ defmodule GanttEx.Live.Gantt do
     * `:tooltips` - show tooltips when hovering bars. Defaults to `true`.
     * `:reorder` - drag rows in the grid to reorder or re-parent tasks. Defaults to `true`.
     * `:links_editable` - draw and edit dependencies. Defaults to `true`.
+    * `:undo` - undo and redo with the toolbar or Ctrl/Cmd+Z and
+      Ctrl/Cmd+Shift+Z (Ctrl+Y). Undone changes are reported as events too.
+      Defaults to `true`.
     * `:drag_create` - drag on an empty area of the timeline to create a task
       (otherwise dragging pans the chart; hold Shift for the other behaviour).
       Defaults to `false`.
@@ -135,7 +138,20 @@ defmodule GanttEx.Live.Gantt do
 
   import GanttEx.Live.Components
 
-  alias GanttEx.{Dates, Event, Export, I18n, Layout, Link, LinkForm, Store, Task, TaskForm}
+  alias GanttEx.{
+    Dates,
+    Event,
+    Export,
+    History,
+    I18n,
+    Layout,
+    Link,
+    LinkForm,
+    Store,
+    Task,
+    TaskForm
+  }
+
   alias GanttEx.{Marker, Timeline, Zoom}
   alias GanttEx.Live.{Columns, Interaction}
 
@@ -173,6 +189,7 @@ defmodule GanttEx.Live.Gantt do
     calendars: [],
     markers: [],
     today_marker: false,
+    undo: true,
     export_filename: "gantt",
     theme: "auto",
     class: nil,
@@ -236,7 +253,8 @@ defmodule GanttEx.Live.Gantt do
        grid_width_override: nil,
        labels_locale: nil,
        timeline: nil,
-       viewport: %{top: 0, height: 900}
+       viewport: %{top: 0, height: 900},
+       history: History.new()
      )}
   end
 
@@ -654,6 +672,9 @@ defmodule GanttEx.Live.Gantt do
         levels={@zoom_levels}
         export_formats={@export_formats}
         can_add={not @readonly}
+        can_undo={@undo and not @readonly and History.can_undo?(@history)}
+        can_redo={@undo and not @readonly and History.can_redo?(@history)}
+        show_history={@undo and not @readonly}
       >
         {render_slot(@toolbar_actions)}
       </.toolbar>
@@ -843,6 +864,9 @@ defmodule GanttEx.Live.Gantt do
       {:noreply, handle_key(key, socket)}
     end
   end
+
+  def handle_event("undo", _params, socket), do: {:noreply, history_step(socket, :undo)}
+  def handle_event("redo", _params, socket), do: {:noreply, history_step(socket, :redo)}
 
   def handle_event("close_quick_info", _params, socket),
     do: {:noreply, socket |> assign(quick_info_key: nil) |> prepare()}
@@ -1563,16 +1587,45 @@ defmodule GanttEx.Live.Gantt do
   # -- helpers: results and notifications --------------------------------------
 
   defp apply_result(socket, {:ok, store, changes}) do
-    socket = assign(socket, store: store, notice: nil)
-    Enum.each(changes, &notify(socket, Event.from_change(socket.assigns.id, &1)))
-    socket
+    history =
+      if changes != [] and socket.assigns.undo,
+        do: History.record(socket.assigns.history, socket.assigns.store),
+        else: socket.assigns.history
+
+    socket = assign(socket, store: store, history: history, notice: nil)
+    notify_changes(socket, changes)
   end
 
   defp apply_result(socket, {:error, reason}) do
     assign(socket, notice: error_message(reason, socket.assigns.labels))
   end
 
+  defp notify_changes(socket, changes) do
+    Enum.each(changes, &notify(socket, Event.from_change(socket.assigns.id, &1)))
+    socket
+  end
+
   defp notify(socket, event), do: Event.notify(socket.assigns.notify || self(), event)
+
+  # Undo / redo replace the store with a snapshot and report the differences.
+  defp history_step(%{assigns: a} = socket, direction) do
+    result =
+      if a.undo and not a.readonly,
+        do: apply(History, direction, [a.history, a.store]),
+        else: :empty
+
+    case result do
+      {:ok, history, store, changes} ->
+        socket
+        |> sync_ui_state(a.store, store)
+        |> assign(store: store, history: history, notice: nil, lightbox_state: nil, confirm: nil)
+        |> notify_changes(changes)
+        |> prepare()
+
+      :empty ->
+        socket
+    end
+  end
 
   defp error_message(reason, labels)
        when reason in [:self_link, :duplicate_link, :cycle, :missing_task],
