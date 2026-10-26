@@ -40,6 +40,19 @@ These are the features of the DHTMLX Gantt community edition:
 - **Events for persistence**: every change is sent to your LiveView as
   `{GanttEx, %GanttEx.Event{}}`
 
+And the features of the PRO edition (see the
+[Advanced features](guides/pro_features.md) guide):
+
+- **Working-time calendars** with holidays and per-task calendars
+- **Auto-scheduling** with the eight task constraints, strict mode and ALAP
+- **Critical path** and total/free **slack**
+- **Baselines** and **deadlines** with overdue detection
+- **Resources**: assignments, load histogram and overload detection
+- **Grouping** by any field or by resource
+- **Split tasks** and **rollups**
+- **Undo/redo**, **multi-selection** and multi-drag
+- **Timeline markers**, **WBS codes**, **dynamic loading** and **auto types**
+
 ## Installation
 
 Add `gantt_ex` to your dependencies (Phoenix 1.8+, LiveView 1.2+):
@@ -120,6 +133,7 @@ field ends up in `task.meta` and can be shown in custom columns.
 - [Persistence](guides/persistence.md)
 - [Customization](guides/customization.md)
 - [Internationalization](guides/i18n.md)
+- [Advanced features](guides/pro_features.md)
 
 ## Example application
 
@@ -143,10 +157,3 @@ mix precommit  # compile with warnings as errors, format and test
 ## License
 
 MIT, see the `LICENSE` file.
-
-## Roadmap
-
-The next version targets the DHTMLX PRO features: working-time calendars,
-auto-scheduling, critical path, resources, baselines and deadlines,
-constraints, split tasks, rollups, grouping, undo/redo, multi-selection,
-timeline markers and WBS codes.

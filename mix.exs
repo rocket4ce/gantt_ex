@@ -67,6 +67,7 @@ defmodule GanttEx.MixProject do
         "guides/persistence.md",
         "guides/customization.md",
         "guides/i18n.md",
+        "guides/pro_features.md",
         "CHANGELOG.md"
       ],
       groups_for_extras: [Guides: ~r/guides\//],
@@ -81,7 +82,22 @@ defmodule GanttEx.MixProject do
           GanttEx.Live.Styles,
           GanttEx.ColocatedCSS
         ],
-        "Data model": [GanttEx.Task, GanttEx.Link, GanttEx.Store, GanttEx.Event],
+        "Data model": [
+          GanttEx.Task,
+          GanttEx.Link,
+          GanttEx.Store,
+          GanttEx.Event,
+          GanttEx.History,
+          GanttEx.Marker,
+          GanttEx.Resource
+        ],
+        Scheduling: [
+          GanttEx.Calendar,
+          GanttEx.Dependency,
+          GanttEx.Scheduler,
+          GanttEx.CriticalPath,
+          GanttEx.ResourceLoad
+        ],
         "Time & layout": [
           GanttEx.Dates,
           GanttEx.Scale,
