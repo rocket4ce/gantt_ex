@@ -19,6 +19,14 @@ defmodule LiveGantt.Planning.Task do
     field :open, :boolean, default: true
     field :position, :integer, default: 0
     field :owner, :string
+    field :planned_start, :naive_datetime
+    field :planned_end, :naive_datetime
+    field :deadline, :naive_datetime
+
+    field :constraint_type, Ecto.Enum,
+      values: [:asap, :alap, :snet, :snlt, :fnet, :fnlt, :mso, :mfo]
+
+    field :constraint_date, :naive_datetime
 
     belongs_to :parent, __MODULE__
 
@@ -37,7 +45,12 @@ defmodule LiveGantt.Planning.Task do
       :open,
       :position,
       :owner,
-      :parent_id
+      :parent_id,
+      :planned_start,
+      :planned_end,
+      :deadline,
+      :constraint_type,
+      :constraint_date
     ])
     |> validate_required([:text, :type, :start_date, :duration])
     |> validate_length(:text, max: 255)

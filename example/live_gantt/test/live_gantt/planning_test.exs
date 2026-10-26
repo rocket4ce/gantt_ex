@@ -43,7 +43,9 @@ defmodule LiveGantt.PlanningTest do
     gantt_link = gantt_link(link)
     :ok = Planning.apply_event(%Event{type: :task_deleted, task: task})
 
-    assert :ok = Planning.apply_event(%Event{type: :task_created, task: %{task | parent: project.id}})
+    assert :ok =
+             Planning.apply_event(%Event{type: :task_created, task: %{task | parent: project.id}})
+
     assert :ok = Planning.apply_event(%Event{type: :link_created, link: gantt_link})
     assert Repo.get(Task, design.id)
     assert Repo.get(Link, link.id)

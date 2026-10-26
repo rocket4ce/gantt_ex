@@ -34,39 +34,65 @@ defmodule LiveGanttWeb.GanttLive do
     "ja" => "担当者"
   }
 
+  # Advanced features the demo can switch on and off.
+  @toggles [
+    {"work_time", "Working days"},
+    {"auto_scheduling", "Auto-schedule"},
+    {"baselines", "Baselines"},
+    {"group", "Group by owner"},
+    {"workload", "Workload"},
+    {"readonly", "Read only"}
+  ]
+
   @impl true
   def mount(_params, _session, socket) do
+    params = %{"locale" => "en", "query" => "", "baselines" => "true"}
+
     {:ok,
      socket
-     |> assign(
-       page_title: "Gantt",
-       locales: @locales,
-       locale: "en",
-       readonly: false,
-       query: "",
-       filter: nil,
-       activity_count: 0,
-       settings: to_form(%{"locale" => "en", "query" => "", "readonly" => "false"}, as: :settings)
-     )
+     |> assign(page_title: "Gantt", locales: @locales, toggles: @toggles, activity_count: 0)
+     |> assign(calendar_dates())
+     |> apply_settings(params)
      |> stream(:activity, [])
      |> load_data()}
   end
 
-  @impl true
-  def handle_event("settings", %{"settings" => params}, socket) do
+  # The sample project starts last week (see priv/repo/seeds.exs).
+  defp calendar_dates do
+    today = Date.utc_today()
+    monday = Date.add(today, 1 - Date.day_of_week(today) - 7)
+
+    %{
+      holiday: Date.add(monday, 16),
+      markers: [
+        %{id: "freeze", date: Date.add(monday, 29), text: "Release freeze", color: "#8b5cf6"}
+      ]
+    }
+  end
+
+  defp apply_settings(socket, params) do
     locale =
       if params["locale"] in Enum.map(@locales, &elem(&1, 1)), do: params["locale"], else: "en"
 
     query = params |> Map.get("query", "") |> String.trim()
 
-    {:noreply,
-     assign(socket,
-       locale: locale,
-       readonly: params["readonly"] == "true",
-       query: query,
-       filter: text_filter(query),
-       settings: to_form(params, as: :settings)
-     )}
+    enabled =
+      Map.new(@toggles, fn {key, _label} ->
+        {String.to_existing_atom(key), params[key] == "true"}
+      end)
+
+    assign(socket,
+      locale: locale,
+      query: query,
+      filter: text_filter(query),
+      options: enabled,
+      settings: to_form(params, as: :settings)
+    )
+  end
+
+  @impl true
+  def handle_event("settings", %{"settings" => params}, socket) do
+    {:noreply, apply_settings(socket, params)}
   end
 
   @impl true
@@ -84,9 +110,25 @@ defmodule LiveGanttWeb.GanttLive do
     end
   end
 
+  # Owners double as resources, to show the workload panel and grouping.
   defp load_data(socket) do
-    tasks = Planning.list_tasks()
-    assign(socket, tasks: tasks, links: Planning.list_links(), stats: stats(tasks))
+    records = Planning.list_tasks()
+    tasks = Enum.map(records, &Map.put(Map.from_struct(&1), :resources, List.wrap(&1.owner)))
+
+    resources =
+      records
+      |> Enum.map(& &1.owner)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> Enum.sort()
+      |> Enum.map(&%{id: &1, text: &1, capacity: 8})
+
+    assign(socket,
+      tasks: tasks,
+      links: Planning.list_links(),
+      resources: resources,
+      stats: stats(records)
+    )
   end
 
   defp text_filter(""), do: nil
@@ -180,7 +222,7 @@ defmodule LiveGanttWeb.GanttLive do
           for={@settings}
           id="settings-form"
           phx-change="settings"
-          class="flex flex-wrap items-end gap-3 [&_.fieldset]:mb-0"
+          class="flex max-w-3xl flex-wrap items-end justify-end gap-3 [&_.fieldset]:mb-0"
         >
           <div class="w-56">
             <.input
@@ -195,8 +237,10 @@ defmodule LiveGanttWeb.GanttLive do
           <div class="w-48">
             <.input field={@settings[:locale]} type="select" label="Language" options={@locales} />
           </div>
-          <div class="pb-2">
-            <.input field={@settings[:readonly]} type="checkbox" label="Read only" />
+          <div class="flex w-full flex-wrap items-center justify-end gap-x-4 gap-y-1">
+            <div :for={{key, label} <- @toggles} id={"toggle-#{key}"}>
+              <.input field={@settings[key]} type="checkbox" label={label} />
+            </div>
           </div>
         </.form>
       </section>
@@ -226,14 +270,25 @@ defmodule LiveGanttWeb.GanttLive do
         tasks={@tasks}
         links={@links}
         locale={@locale}
-        readonly={@readonly}
+        readonly={@options.readonly}
         filter={@filter}
+        work_time={@options.work_time}
+        calendar={[holidays: [@holiday]]}
+        auto_scheduling={@options.auto_scheduling}
+        baselines={@options.baselines}
+        group_by={@options.group && :owner}
+        resources={@resources}
+        resource_panel={@options.workload}
+        today_marker
+        markers={@markers}
+        lightbox_sections={[:text, :type, :parent, :time, :progress, :deadline]}
         drag_create
         height="64vh"
         export_filename="website-relaunch"
         class="shadow-sm"
       >
-        <:column field={:text} tree width={250} />
+        <:column field={:wbs} width={56} />
+        <:column field={:text} tree width={240} />
         <:column :let={task} field={:owner} label={@owner_label} width={132} editor={:text}>
           <span :if={task.meta[:owner]} class="flex min-w-0 items-center gap-2">
             <span class="grid size-5 shrink-0 place-items-center rounded-full bg-indigo-500/15 text-[9px] font-bold text-indigo-600 dark:text-indigo-300">
@@ -301,6 +356,8 @@ defmodule LiveGanttWeb.GanttLive do
             <.shortcut keys={["Enter"]}>Edit task</.shortcut>
             <.shortcut keys={["Del"]}>Delete task</.shortcut>
             <.shortcut keys={["+", "−"]}>Zoom in / out</.shortcut>
+            <.shortcut keys={["⌘/Ctrl", "Z"]}>Undo (add Shift to redo)</.shortcut>
+            <.shortcut keys={["⌘/Ctrl", "click"]}>Select several tasks</.shortcut>
             <.shortcut keys={["Shift", "drag"]}>Pan the timeline</.shortcut>
           </dl>
         </div>

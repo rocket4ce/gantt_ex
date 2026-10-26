@@ -65,6 +65,34 @@ defmodule LiveGanttWeb.GanttLiveTest do
     assert has_element?(view, ".gx-row", "Launch party")
   end
 
+  test "advanced features can be switched on", %{conn: conn, design: design} do
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    view |> element("#settings-form") |> render_change(%{"settings" => %{"group" => "true"}})
+    assert has_element?(view, "[data-gx-row='g:Ana']", "Ana")
+
+    view |> element("#settings-form") |> render_change(%{"settings" => %{"workload" => "true"}})
+    assert has_element?(view, "#project-gantt-resource-Ana")
+
+    view |> element("#settings-form") |> render_change(%{"settings" => %{"baselines" => "false"}})
+    refute has_element?(view, ".gx-baseline")
+    assert has_element?(view, "[data-gx-row='#{design.id}']")
+  end
+
+  test "baselines and deadlines are persisted", %{conn: conn, build: build} do
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    view |> element("#project-gantt") |> render_hook("gx:dblclick", %{"key" => build.id})
+
+    view
+    |> element("#project-gantt-lightbox-form")
+    |> render_submit(%{"task" => %{"text" => "Build", "deadline" => "2025-01-10"}})
+
+    sync(view)
+    assert %Task{deadline: ~N[2025-01-10 00:00:00]} = Repo.reload!(build)
+    assert has_element?(view, "[data-gx-bar='#{build.id}'].gx-bar--overdue")
+  end
+
   test "settings change the language, filter and readonly mode", %{conn: conn, design: design} do
     {:ok, view, _html} = live(conn, ~p"/")
 

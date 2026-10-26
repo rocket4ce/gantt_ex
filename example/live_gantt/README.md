@@ -20,6 +20,14 @@ mix phx.server   # http://localhost:4000
 - `assets/js/app.js` and `assets/css/app.css` - the two lines that install
   the GanttEx hook and stylesheet.
 
+## Advanced features
+
+The switches above the chart turn on working days (with a holiday),
+auto-scheduling, baselines, grouping by owner, the workload panel (owners
+double as resources) and read-only mode. The toolbar toggles the critical
+path, and the chart shows a today marker, a "Release freeze" marker, WBS
+codes and deadlines.
+
 ## Troubleshooting
 
 **`GET /assets/css/app.css` returns 404 on macOS.** The standalone Tailwind

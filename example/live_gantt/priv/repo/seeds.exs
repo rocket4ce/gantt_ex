@@ -18,7 +18,10 @@ project = fn text, position ->
   insert.(%{text: text, type: :project, start_date: at.(0), duration: 1, position: position})
 end
 
+# The baseline is the original plan: `slip` days earlier than the current dates.
 task = fn parent, position, text, offset, duration, opts ->
+  {slip, opts} = Keyword.pop(opts, :slip, 0)
+
   insert.(
     Map.merge(
       %{
@@ -26,7 +29,9 @@ task = fn parent, position, text, offset, duration, opts ->
         parent_id: parent.id,
         position: position,
         start_date: at.(offset),
-        duration: duration
+        duration: duration,
+        planned_start: at.(offset - slip),
+        planned_end: at.(offset - slip + duration)
       },
       Map.new(opts)
     )
@@ -40,10 +45,10 @@ research = task.(discovery, 2, "Competitive analysis", 1, 4, owner: "Luis", prog
 signoff = task.(discovery, 3, "Requirements sign-off", 5, 0, type: :milestone)
 
 design = project.("Design", 1)
-ia = task.(design, 0, "Information architecture", 5, 3, owner: "Marta", progress: 0.6)
-wireframes = task.(design, 1, "Wireframes", 8, 5, owner: "Marta", progress: 0.2)
-visual = task.(design, 2, "Visual design", 10, 6, owner: "Kenji")
-review = task.(design, 3, "Design review", 16, 0, type: :milestone)
+ia = task.(design, 0, "Information architecture", 5, 3, owner: "Marta", progress: 0.6, slip: 1)
+wireframes = task.(design, 1, "Wireframes", 8, 5, owner: "Marta", progress: 0.2, slip: 2)
+visual = task.(design, 2, "Visual design", 10, 6, owner: "Kenji", slip: 2, deadline: at.(14))
+review = task.(design, 3, "Design review", 16, 0, type: :milestone, slip: 2)
 
 development = project.("Development", 2)
 frontend = task.(development, 0, "Frontend build", 16, 10, owner: "Luis")
@@ -53,7 +58,7 @@ api = task.(development, 2, "API & integrations", 17, 8, owner: "Ana")
 launch = project.("Launch", 3)
 qa = task.(launch, 0, "QA & accessibility", 26, 5, owner: "Sofía")
 content = task.(launch, 1, "Content migration", 24, 4, owner: "Kenji")
-go_live = task.(launch, 2, "Go live", 31, 0, type: :milestone)
+go_live = task.(launch, 2, "Go live", 31, 0, type: :milestone, deadline: at.(32))
 
 for {source, target, type} <- [
       {kickoff, interviews, :finish_to_start},

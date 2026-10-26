@@ -109,7 +109,9 @@ defmodule LiveGantt.Planning do
     {parent, fields} = Map.pop(fields, :parent, :unchanged)
 
     fields
-    |> Map.take([:text, :type, :start_date, :duration, :progress, :open, :owner])
+    |> Map.take(
+      ~w(text type start_date duration progress open owner planned_start planned_end deadline constraint_type constraint_date)a
+    )
     |> then(fn attrs ->
       if parent == :unchanged, do: attrs, else: Map.put(attrs, :parent_id, parent)
     end)
