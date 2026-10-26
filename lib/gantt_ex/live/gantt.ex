@@ -239,6 +239,7 @@ defmodule GanttEx.Live.Gantt do
        data_source: nil,
        collapsed: MapSet.new(),
        selected: nil,
+       selection: MapSet.new(),
        selected_link: nil,
        quick_info_key: nil,
        lightbox_state: nil,
@@ -409,10 +410,13 @@ defmodule GanttEx.Live.Gantt do
     today = today(a)
     bar_height = a.bar_height || a.row_height - 12
 
+    selection = normalize_selection(a)
+    a = Map.put(a, :selection, selection)
+
     rows =
       a.store
       |> Store.rows(collapsed: a.collapsed, filter: a.filter, sort: a.sort)
-      |> Enum.map(&Map.put(&1, :selected, &1.key == a.selected))
+      |> Enum.map(&Map.put(&1, :selected, MapSet.member?(selection, &1.key)))
 
     timeline = build_timeline(a, level, today)
 
@@ -438,6 +442,7 @@ defmodule GanttEx.Live.Gantt do
 
     socket
     |> assign(
+      selection: selection,
       level: level,
       rows: rows,
       bars: bars,
@@ -508,6 +513,15 @@ defmodule GanttEx.Live.Gantt do
   defp smart_rendering?(:auto, count), do: count > @auto_threshold
   defp smart_rendering?(enabled, count), do: enabled == true and count > 0
 
+  # The selection always contains the primary selected task, when any.
+  defp normalize_selection(%{selected: nil}), do: MapSet.new()
+
+  defp normalize_selection(a) do
+    if MapSet.member?(a.selection, a.selected),
+      do: MapSet.filter(a.selection, &Store.task_by_key(a.store, &1)),
+      else: MapSet.new([a.selected])
+  end
+
   defp today(%{today: nil}), do: NaiveDateTime.local_now() |> NaiveDateTime.truncate(:second)
   defp today(%{today: today}), do: Dates.cast!(today)
 
@@ -539,7 +553,7 @@ defmodule GanttEx.Live.Gantt do
     summary = task.type == :project and Store.has_children?(a.store, task.id)
 
     Map.merge(bar, %{
-      selected: bar.key == a.selected,
+      selected: MapSet.member?(a.selection, bar.key),
       drag: if(editable and not summary, do: "move", else: "none"),
       resizable: editable and not summary and task.type != :milestone,
       progress_editable: editable and task.type != :milestone,
@@ -979,26 +993,24 @@ defmodule GanttEx.Live.Gantt do
   # -- events: deletion --------------------------------------------------------
 
   def handle_event("request_delete", %{"key" => key}, socket) do
-    socket =
-      with_editable_task(socket, key, fn task ->
-        labels = socket.assigns.labels
+    a = socket.assigns
+    selection = normalize_selection(a)
 
-        assign(socket,
-          lightbox_state: nil,
-          quick_info_key: nil,
-          confirm: %{
-            kind: :task,
-            key: key,
-            message: labels.confirm_delete_task,
-            detail:
-              if(Store.has_children?(socket.assigns.store, task.id),
-                do: labels.confirm_delete_subtasks
-              )
-          }
-        )
-      end)
+    if MapSet.size(selection) > 1 and MapSet.member?(selection, key) and not a.readonly do
+      count = length(selected_tasks(a))
 
-    {:noreply, prepare(socket)}
+      confirm = %{
+        kind: :tasks,
+        keys: MapSet.to_list(selection),
+        message: I18n.confirm_delete_tasks(count, a.labels_locale),
+        detail: a.labels.confirm_delete_subtasks
+      }
+
+      {:noreply,
+       socket |> assign(lightbox_state: nil, quick_info_key: nil, confirm: confirm) |> prepare()}
+    else
+      request_delete_one(socket, key)
+    end
   end
 
   def handle_event("request_delete_link", %{"key" => key}, socket) do
@@ -1020,6 +1032,17 @@ defmodule GanttEx.Live.Gantt do
 
     socket =
       case a.confirm do
+        %{kind: :tasks} ->
+          ids =
+            a
+            |> Map.put(:selection, MapSet.new(a.confirm.keys))
+            |> selected_tasks()
+            |> Enum.map(& &1.id)
+
+          socket
+          |> apply_result(batch(a.store, ids, &Store.delete_task/2))
+          |> assign(selected: nil, selection: MapSet.new(), quick_info_key: nil)
+
         %{kind: :task, key: key} ->
           with_editable_task(socket, key, fn task ->
             socket
@@ -1203,8 +1226,18 @@ defmodule GanttEx.Live.Gantt do
     socket =
       with_editable_task(socket, key, fn task ->
         case Interaction.drag_attrs(task, mode, params, interaction_ctx(a)) do
-          nil -> socket
-          attrs -> apply_result(socket, Store.update_task(a.store, task.id, attrs))
+          nil ->
+            socket
+
+          %{start_date: start} = attrs when mode == "move" ->
+            if MapSet.size(a.selection) > 1 and MapSet.member?(a.selection, key) do
+              apply_result(socket, move_selection(a, NaiveDateTime.diff(start, task.start_date)))
+            else
+              apply_result(socket, Store.update_task(a.store, task.id, attrs))
+            end
+
+          attrs ->
+            apply_result(socket, Store.update_task(a.store, task.id, attrs))
         end
       end)
 
@@ -1307,6 +1340,10 @@ defmodule GanttEx.Live.Gantt do
     {:reply, %{ok: true}, prepare(socket)}
   end
 
+  def handle_event("gx:select", %{"key" => key, "mode" => mode}, socket) do
+    {:noreply, socket |> extend_selection(key, mode) |> prepare()}
+  end
+
   def handle_event("gx:viewport", %{"top" => top, "height" => height}, socket) do
     case {Interaction.number(top), Interaction.number(height)} do
       {top, height} when is_number(top) and is_number(height) and top >= 0 and height > 0 ->
@@ -1332,17 +1369,123 @@ defmodule GanttEx.Live.Gantt do
         socket
 
       task ->
-        if a.selected != key,
-          do: notify(socket, %Event{gantt_id: a.id, type: :task_selected, task: task})
+        if a.selected != key or MapSet.size(a.selection) > 1,
+          do: notify_selection(socket, task, [task.id])
 
         assign(socket,
           selected: key,
+          selection: MapSet.new([key]),
           selected_link: nil,
           quick_info_key: if(from_bar? and a.quick_info, do: key),
           editing: nil,
           notice: nil
         )
     end
+  end
+
+  defp notify_selection(socket, task, ids) do
+    notify(socket, %Event{
+      gantt_id: socket.assigns.id,
+      type: :task_selected,
+      task: task,
+      selection: ids
+    })
+  end
+
+  defp request_delete_one(socket, key) do
+    socket =
+      with_editable_task(socket, key, fn task ->
+        labels = socket.assigns.labels
+
+        assign(socket,
+          lightbox_state: nil,
+          quick_info_key: nil,
+          confirm: %{
+            kind: :task,
+            key: key,
+            message: labels.confirm_delete_task,
+            detail:
+              if(Store.has_children?(socket.assigns.store, task.id),
+                do: labels.confirm_delete_subtasks
+              )
+          }
+        )
+      end)
+
+    {:noreply, prepare(socket)}
+  end
+
+  # Moves every movable selected task by the same amount of time.
+  defp move_selection(a, seconds) do
+    tasks =
+      a
+      |> selected_tasks()
+      |> Enum.reject(&(&1.type == :project and Store.has_children?(a.store, &1.id)))
+
+    batch(a.store, tasks, fn store, task ->
+      Store.update_task(store, task.id, %{
+        start_date: NaiveDateTime.add(task.start_date, seconds, :second)
+      })
+    end)
+  end
+
+  # Ctrl/Cmd+click toggles a task, Shift+click selects the rows in between.
+  defp extend_selection(socket, key, mode) do
+    a = socket.assigns
+
+    case Store.task_by_key(a.store, key) do
+      nil ->
+        socket
+
+      task ->
+        selection =
+          case mode do
+            "range" ->
+              keys = Enum.map(a.rows, & &1.key)
+
+              from =
+                Enum.find_index(keys, &(&1 == a.selected)) || Enum.find_index(keys, &(&1 == key))
+
+              to = Enum.find_index(keys, &(&1 == key))
+
+              if from && to,
+                do: keys |> Enum.slice(min(from, to)..max(from, to)) |> MapSet.new(),
+                else: MapSet.new([key])
+
+            _toggle ->
+              current = normalize_selection(a)
+
+              if MapSet.member?(current, key),
+                do: MapSet.delete(current, key),
+                else: MapSet.put(current, key)
+          end
+
+        primary =
+          if MapSet.member?(selection, key),
+            do: key,
+            else: selection |> MapSet.to_list() |> List.first()
+
+        ids = selection |> MapSet.to_list() |> Enum.map(&Store.task_by_key(a.store, &1).id)
+        notify_selection(socket, (primary && Store.task_by_key(a.store, primary)) || task, ids)
+
+        assign(socket, selected: primary, selection: selection, quick_info_key: nil, editing: nil)
+    end
+  end
+
+  # Applies `fun` to several items as a single change (one undo step).
+  defp batch(store, items, fun) do
+    Enum.reduce(items, {:ok, store, []}, fn item, {:ok, store, acc} ->
+      case fun.(store, item) do
+        {:ok, store, changes} -> {:ok, store, acc ++ changes}
+        {:error, _reason} -> {:ok, store, acc}
+      end
+    end)
+  end
+
+  defp selected_tasks(a) do
+    a.selection
+    |> Enum.map(&Store.task_by_key(a.store, &1))
+    |> Enum.reject(&(is_nil(&1) or &1.readonly))
   end
 
   defp with_task(socket, key, fun) do
@@ -1490,7 +1633,9 @@ defmodule GanttEx.Live.Gantt do
         request_delete_selected(socket, row)
 
       "Escape" ->
-        socket |> assign(selected: nil, selected_link: nil, quick_info_key: nil) |> prepare()
+        socket
+        |> assign(selected: nil, selection: MapSet.new(), selected_link: nil, quick_info_key: nil)
+        |> prepare()
 
       key when key in ["+", "="] ->
         zoom_step(socket, :in)

@@ -30,8 +30,9 @@ defmodule GanttEx.Event do
       and `:siblings` (ordered ids of the new siblings) describe where.
     * `:link_created`, `:link_updated`, `:link_deleted` - `:link` holds the link,
       `:changes` the changed fields for updates.
-    * `:task_selected` - the user selected a task (`:task`), or cleared the
-      selection (`task: nil`).
+    * `:task_selected` - the user selected a task (`:task`). `:selection` holds
+      the ids of every selected task (Ctrl/Cmd+click and Shift+click select
+      several).
 
   `:gantt_id` is the `id` of the component that sent the event, which allows
   several charts in the same LiveView.
@@ -39,7 +40,7 @@ defmodule GanttEx.Event do
 
   alias GanttEx.{Link, Store, Task}
 
-  defstruct [:gantt_id, :type, :task, :link, :changes, :parent, :index, :siblings]
+  defstruct [:gantt_id, :type, :task, :link, :changes, :parent, :index, :siblings, :selection]
 
   @type type ::
           :task_created
@@ -59,7 +60,8 @@ defmodule GanttEx.Event do
           changes: map() | nil,
           parent: Task.id() | nil,
           index: non_neg_integer() | nil,
-          siblings: [Task.id()] | nil
+          siblings: [Task.id()] | nil,
+          selection: [Task.id()] | nil
         }
 
   @doc """

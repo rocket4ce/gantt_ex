@@ -202,6 +202,23 @@ defmodule GanttEx.I18n do
     with_locale(locale, fn -> unit_text(unit, count) end)
   end
 
+  @doc """
+  Returns the confirmation message to delete several tasks.
+
+      iex> GanttEx.I18n.confirm_delete_tasks(3, "en")
+      "Are you sure you want to delete these 3 tasks?"
+  """
+  @spec confirm_delete_tasks(pos_integer(), locale()) :: String.t()
+  def confirm_delete_tasks(count, locale) do
+    with_locale(locale, fn ->
+      ngettext(
+        "Are you sure you want to delete %{count} task?",
+        "Are you sure you want to delete these %{count} tasks?",
+        count
+      )
+    end)
+  end
+
   defp unit_text(:minute, n), do: ngettext("%{count} minute", "%{count} minutes", n)
   defp unit_text(:hour, n), do: ngettext("%{count} hour", "%{count} hours", n)
   defp unit_text(:day, n), do: ngettext("%{count} day", "%{count} days", n)

@@ -13,6 +13,7 @@ defmodule GanttEx.Live.Hook do
     * dragging on the timeline to create a task, or to pan the chart
     * resizing grid columns and the grid itself
     * double click to open the lightbox
+    * Ctrl/Cmd+click and Shift+click selection, and moving the selected bars together
     * undo / redo keyboard shortcuts (they need modifier keys)
     * fullscreen, print, scrolling and file downloads requested by the server
       (PNG images are rasterized from the server-rendered SVG)
@@ -56,7 +57,16 @@ defmodule GanttEx.Live.Hook do
               e.preventDefault()
               e.stopPropagation()
               this.suppressClick = false
+              return
             }
+            // Ctrl/Cmd+click and Shift+click extend the selection (phx-click has no modifiers).
+            if (!(e.ctrlKey || e.metaKey || e.shiftKey)) return
+            if (e.target.closest("input, select, textarea, button, a, .gx-popup")) return
+            const el = e.target.closest("[data-gx-bar], [data-gx-row]")
+            if (!el) return
+            e.preventDefault()
+            e.stopPropagation()
+            this.push("gx:select", {key: el.dataset.gxBar || el.dataset.gxRow, mode: e.shiftKey ? "range" : "toggle"})
           }
           // Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y): phx-keydown has no modifiers.
           this.onKeyDown = (e) => {
@@ -226,7 +236,12 @@ defmodule GanttEx.Live.Hook do
         // -- bars --------------------------------------------------------------
 
         dragBar(e, bar, mode) {
+          if (e.shiftKey || e.ctrlKey || e.metaKey) return
           const x0 = px(bar, "--gx-x"), w0 = px(bar, "--gx-w")
+          // dragging a selected bar moves the whole selection
+          const group = mode === "move" && bar.classList.contains("gx-bar--selected")
+            ? [...this.el.querySelectorAll(".gx-bar--selected[data-gx-drag=move]")]
+            : [bar]
           const snap = this.snapPx()
           const snapDelta = (dx) => (snap && mode !== "progress") ? Math.round(dx / snap) * snap : dx
           const scroll0 = this.viewport.scrollLeft
@@ -236,7 +251,7 @@ defmodule GanttEx.Live.Hook do
             autoScroll: true,
             onMove: (dx, _dy, ev) => {
               dx = snapDelta(dx + this.viewport.scrollLeft - scroll0)
-              bar.classList.add("gx-bar--dragging")
+              group.forEach((el) => el.classList.add("gx-bar--dragging"))
               if (mode === "move") state = {dx, dw: 0}
               if (mode === "start") { const d = Math.min(dx, w0 - MIN_BAR); state = {dx: d, dw: -d} }
               if (mode === "end") state = {dx: 0, dw: Math.max(dx, MIN_BAR - w0)}
@@ -245,14 +260,18 @@ defmodule GanttEx.Live.Hook do
                 state = {dx: 0, dw: 0, progress: clamp((ev.clientX - rect.left) / rect.width, 0, 1)}
                 bar.style.setProperty("--gx-pd", `${state.progress * 100}%`)
               } else {
-                bar.style.setProperty("--gx-dx", `${state.dx}px`)
-                bar.style.setProperty("--gx-dw", `${state.dw}px`)
+                for (const el of group) {
+                  el.style.setProperty("--gx-dx", `${state.dx}px`)
+                  el.style.setProperty("--gx-dw", `${state.dw}px`)
+                }
               }
             },
             onEnd: (_dx, _dy, _ev, moved) => {
               const reset = () => {
-                bar.classList.remove("gx-bar--dragging")
-                for (const prop of ["--gx-dx", "--gx-dw", "--gx-pd"]) bar.style.removeProperty(prop)
+                for (const el of group) {
+                  el.classList.remove("gx-bar--dragging")
+                  for (const prop of ["--gx-dx", "--gx-dw", "--gx-pd"]) el.style.removeProperty(prop)
+                }
               }
               if (!moved) return reset()
               this.push("gx:drag", {
