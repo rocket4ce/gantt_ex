@@ -1,0 +1,1000 @@
+defmodule GanttEx.Store do
+  @moduledoc """
+  An immutable, in-memory container of tasks and links.
+
+  The store keeps tasks as an ordered tree (siblings keep the order they were
+  given in), computes missing dates/durations, rolls up the dates of
+  `:project` tasks from their children and validates dependencies.
+
+  Every mutating function returns `{:ok, store, changes}`, where `changes` is
+  the list of everything that changed, including side effects such as the
+  dates of a parent project or the links removed with a task. `GanttEx.Live.Gantt`
+  turns each change into a `GanttEx.Event` for the parent LiveView.
+
+  ## Examples
+
+      iex> {:ok, store} =
+      ...>   GanttEx.Store.new(
+      ...>     [
+      ...>       %{id: 1, text: "Website", type: :project},
+      ...>       %{id: 2, text: "Design", parent: 1, start_date: ~D[2025-01-06], duration: 3},
+      ...>       %{id: 3, text: "Build", parent: 1, start_date: ~D[2025-01-09], end_date: ~D[2025-01-16]}
+      ...>     ],
+      ...>     [%{id: 1, source: 2, target: 3}]
+      ...>   )
+      iex> project = GanttEx.Store.get_task(store, 1)
+      iex> {project.start_date, project.end_date, project.duration}
+      {~N[2025-01-06 00:00:00], ~N[2025-01-16 00:00:00], 10}
+      iex> {:ok, store, changes} = GanttEx.Store.update_task(store, 3, %{duration: 9})
+      iex> Enum.map(changes, fn {type, task, _details} -> {type, task.id} end)
+      [task_updated: 3, task_updated: 1]
+      iex> GanttEx.Store.get_task(store, 1).end_date
+      ~N[2025-01-18 00:00:00]
+  """
+
+  alias GanttEx.{Dates, Link, Task}
+
+  defstruct tasks: %{},
+            links: %{},
+            link_order: [],
+            children: %{nil => []},
+            task_keys: %{},
+            link_keys: %{},
+            duration_unit: :day
+
+  @typedoc "A string version of an id, as used in the DOM and in client events."
+  @type key :: String.t()
+
+  @typedoc "Why an operation was rejected."
+  @type error ::
+          Task.error()
+          | {:invalid_task, Task.id(), term()}
+          | {:invalid_link, Task.id(), term()}
+          | {:duplicate_id, :task | :link, Task.id()}
+          | {:parent_cycle, Task.id()}
+          | :not_found
+          | :missing_parent
+          | :invalid_parent
+          | :self_link
+          | :missing_task
+          | :duplicate_link
+          | :cycle
+
+  @typedoc """
+  A change produced by a mutation: `{type, entity, details}`.
+
+    * `:task_created`, `:task_deleted`, `:link_created`, `:link_deleted` have empty details
+    * `:task_updated` and `:link_updated` details contain `:changes`, a map of the
+      changed fields and their new values
+    * `:task_moved` details contain `:parent`, `:index` and `:siblings` (the
+      ordered ids of the new siblings, including the moved task)
+  """
+  @type change ::
+          {:task_created | :task_updated | :task_deleted | :task_moved, Task.t(), map()}
+          | {:link_created | :link_updated | :link_deleted, Link.t(), map()}
+
+  @type t :: %__MODULE__{
+          tasks: %{Task.id() => Task.t()},
+          links: %{Task.id() => Link.t()},
+          link_order: [Task.id()],
+          children: %{(Task.id() | nil) => [Task.id()]},
+          task_keys: %{key() => Task.id()},
+          link_keys: %{key() => Task.id()},
+          duration_unit: Dates.unit()
+        }
+
+  @typedoc "A visible row, as returned by `rows/2`."
+  @type row :: %{
+          task: Task.t(),
+          key: key(),
+          index: non_neg_integer(),
+          level: non_neg_integer(),
+          parent_key: key() | nil,
+          has_children: boolean(),
+          open: boolean()
+        }
+
+  @date_fields [:start_date, :end_date, :duration]
+
+  # -- building ----------------------------------------------------------------
+
+  @doc """
+  Builds a store from lists of tasks and links (anything accepted by
+  `GanttEx.Task.new/1` and `GanttEx.Link.new/1`).
+
+  ## Options
+
+    * `:duration_unit` - unit of `:duration` and `:lag` values. Defaults to `:day`.
+
+  Dates are completed as follows: when both `:start_date` and `:end_date` are
+  given the duration is computed (the end date wins over a given duration);
+  with a start date and a duration the end date is computed; a lone start date
+  gets a duration of 1. Milestones always end when they start.
+
+  Tasks pointing to an unknown parent become root tasks and links pointing to
+  unknown tasks are ignored.
+
+      iex> {:ok, store} = GanttEx.Store.new([%{id: "a", start_date: "2025-02-01 09:00"}], [], duration_unit: :hour)
+      iex> GanttEx.Store.get_task(store, "a").end_date
+      ~N[2025-02-01 10:00:00]
+
+      iex> GanttEx.Store.new([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 1, start_date: ~D[2025-01-01]}])
+      {:error, {:duplicate_id, :task, 1}}
+
+      iex> GanttEx.Store.new([%{id: 1, text: "Undated"}])
+      {:error, {:invalid_task, 1, {:missing, :start_date}}}
+  """
+  @spec new([term()], [term()], keyword()) :: {:ok, t()} | {:error, error()}
+  def new(tasks \\ [], links \\ [], opts \\ []) do
+    unit = Keyword.get(opts, :duration_unit, :day)
+
+    with {:ok, tasks} <- cast_all(tasks, &Task.new/1, :task),
+         {:ok, links} <- cast_all(links, &Link.new/1, :link),
+         :ok <- unique_ids(tasks, :task),
+         :ok <- unique_ids(links, :link),
+         {:ok, tasks} <- schedule_all(tasks, unit) do
+      task_map = Map.new(tasks, &{&1.id, &1})
+      {task_map, children} = build_tree(tasks, task_map)
+
+      store = %__MODULE__{
+        tasks: task_map,
+        children: children,
+        task_keys: Map.new(tasks, &{key(&1.id), &1.id}),
+        duration_unit: unit
+      }
+
+      with :ok <- check_reachable(store) do
+        store = rollup_all(store)
+
+        with :ok <- check_dates(store) do
+          {:ok, Enum.reduce(links, store, &put_link_if_valid(&2, &1))}
+        end
+      end
+    end
+  end
+
+  @doc """
+  Like `new/3` but raises `ArgumentError` when the data is invalid.
+  """
+  @spec new!([term()], [term()], keyword()) :: t()
+  def new!(tasks \\ [], links \\ [], opts \\ []) do
+    case new(tasks, links, opts) do
+      {:ok, store} -> store
+      {:error, reason} -> raise ArgumentError, "invalid Gantt data: #{inspect(reason)}"
+    end
+  end
+
+  defp cast_all(items, fun, kind) do
+    Enum.reduce_while(items, {:ok, []}, fn item, {:ok, acc} ->
+      case fun.(item) do
+        {:ok, entity} -> {:cont, {:ok, [entity | acc]}}
+        {:error, reason} -> {:halt, {:error, {:"invalid_#{kind}", id_of(item), reason}}}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      error -> error
+    end
+  end
+
+  defp id_of(item) when is_list(item), do: Keyword.get(item, :id)
+  defp id_of(item) when is_map(item), do: Map.get(item, :id) || Map.get(item, "id")
+  defp id_of(_item), do: nil
+
+  defp unique_ids(entities, kind) do
+    entities
+    |> Enum.reduce_while(MapSet.new(), fn %{id: id}, seen ->
+      if MapSet.member?(seen, id),
+        do: {:halt, {:error, {:duplicate_id, kind, id}}},
+        else: {:cont, MapSet.put(seen, id)}
+    end)
+    |> case do
+      {:error, _} = error -> error
+      _seen -> :ok
+    end
+  end
+
+  defp schedule_all(tasks, unit) do
+    Enum.reduce_while(tasks, {:ok, []}, fn task, {:ok, acc} ->
+      case schedule(task, unit) do
+        {:ok, task} -> {:cont, {:ok, [task | acc]}}
+        {:error, reason} -> {:halt, {:error, {:invalid_task, task.id, reason}}}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      error -> error
+    end
+  end
+
+  defp build_tree(tasks, task_map) do
+    {tasks, children} =
+      Enum.map_reduce(tasks, %{nil => []}, fn task, children ->
+        parent =
+          if task.parent != task.id and Map.has_key?(task_map, task.parent),
+            do: task.parent,
+            else: nil
+
+        {%{task | parent: parent}, Map.update(children, parent, [task.id], &[task.id | &1])}
+      end)
+
+    {Map.new(tasks, &{&1.id, &1}), Map.new(children, fn {k, ids} -> {k, Enum.reverse(ids)} end)}
+  end
+
+  defp check_reachable(store) do
+    reachable = MapSet.new(descendant_ids(store, nil))
+
+    case Enum.find(Map.keys(store.tasks), &(not MapSet.member?(reachable, &1))) do
+      nil -> :ok
+      id -> {:error, {:parent_cycle, id}}
+    end
+  end
+
+  defp check_dates(store) do
+    case Enum.find(tasks(store), &is_nil(&1.start_date)) do
+      nil -> :ok
+      task -> {:error, {:invalid_task, task.id, {:missing, :start_date}}}
+    end
+  end
+
+  defp put_link_if_valid(store, link) do
+    case link_error(store, link) do
+      nil -> do_put_link(store, link)
+      _reason -> store
+    end
+  end
+
+  # -- scheduling --------------------------------------------------------------
+
+  @doc """
+  Completes the dates of a single task for the given duration unit.
+
+      iex> task = GanttEx.Task.new!(id: 1, start_date: ~D[2025-01-01], duration: 2)
+      iex> {:ok, task} = GanttEx.Store.schedule(task, :day)
+      iex> task.end_date
+      ~N[2025-01-03 00:00:00]
+
+      iex> task = GanttEx.Task.new!(id: 1, start_date: ~D[2025-01-05], end_date: ~D[2025-01-01])
+      iex> GanttEx.Store.schedule(task, :day)
+      {:error, {:invalid, :end_date}}
+  """
+  @spec schedule(Task.t(), Dates.unit(), [atom()]) :: {:ok, Task.t()} | {:error, Task.error()}
+  def schedule(task, unit, changed \\ [])
+
+  def schedule(%Task{type: :milestone} = task, _unit, _changed) do
+    start = task.start_date || task.end_date
+    {:ok, %{task | start_date: start, end_date: start, duration: 0}}
+  end
+
+  def schedule(%Task{} = task, unit, changed) do
+    %Task{start_date: start, end_date: finish, duration: duration} = task
+
+    {start, finish, duration} =
+      cond do
+        is_nil(start) and is_nil(finish) ->
+          {nil, nil, duration}
+
+        is_nil(start) ->
+          {Dates.add(finish, -(duration || 1), unit), finish, duration || 1}
+
+        is_nil(finish) or (:duration in changed and :end_date not in changed) ->
+          duration = duration || 1
+          {start, Dates.add(start, duration, unit), duration}
+
+        :start_date in changed and :end_date not in changed and not is_nil(duration) ->
+          {start, Dates.add(start, duration, unit), duration}
+
+        true ->
+          {start, finish, Dates.diff(start, finish, unit)}
+      end
+
+    if start && NaiveDateTime.compare(finish, start) == :lt do
+      {:error, {:invalid, :end_date}}
+    else
+      {:ok, %{task | start_date: start, end_date: finish, duration: duration && max(duration, 0)}}
+    end
+  end
+
+  defp rollup_all(store) do
+    Enum.reduce(post_order(store, nil), store, fn id, store -> rollup_one(store, id) end)
+  end
+
+  defp post_order(store, id) do
+    Enum.flat_map(child_ids(store, id), &(post_order(store, &1) ++ [&1]))
+  end
+
+  defp rollup_one(store, id) do
+    task = Map.fetch!(store.tasks, id)
+
+    case {task.type, child_ids(store, id)} do
+      {:project, [_ | _] = ids} ->
+        children = Enum.map(ids, &Map.fetch!(store.tasks, &1))
+        start = children |> Enum.map(& &1.start_date) |> Enum.reduce(nil, &Dates.min/2)
+        finish = children |> Enum.map(& &1.end_date) |> Enum.reduce(nil, &Dates.max/2)
+        duration = if start && finish, do: Dates.diff(start, finish, store.duration_unit)
+
+        put_in(store.tasks[id], %{task | start_date: start, end_date: finish, duration: duration})
+
+      _ ->
+        store
+    end
+  end
+
+  # Recomputes the given projects and all their ancestors (deepest first) and
+  # reports the ones whose dates changed.
+  defp rollup(store, ids) do
+    chain =
+      ids
+      |> Enum.reject(&is_nil/1)
+      |> Enum.filter(&Map.has_key?(store.tasks, &1))
+      |> Enum.flat_map(&[&1 | ancestor_ids(store, &1)])
+      |> Enum.uniq()
+      |> Enum.sort_by(&(-level(store, &1)))
+
+    before = Map.take(store.tasks, chain)
+    store = Enum.reduce(chain, store, &rollup_one(&2, &1))
+
+    changes =
+      for id <- chain,
+          new = Map.fetch!(store.tasks, id),
+          diff = field_changes(Map.fetch!(before, id), new, @date_fields),
+          diff != %{},
+          do: {:task_updated, new, %{changes: diff}}
+
+    {store, changes}
+  end
+
+  # -- queries -----------------------------------------------------------------
+
+  @doc """
+  Converts an id into its string key (as used in DOM ids and client events).
+
+      iex> GanttEx.Store.key(42)
+      "42"
+
+      iex> GanttEx.Store.key("a-1")
+      "a-1"
+  """
+  @spec key(Task.id()) :: key()
+  def key(id) when is_binary(id), do: id
+  def key(id) when is_integer(id), do: Integer.to_string(id)
+  def key(id) when is_atom(id), do: Atom.to_string(id)
+  def key(id), do: inspect(id)
+
+  @doc "Returns the duration unit of the store."
+  @spec duration_unit(t()) :: Dates.unit()
+  def duration_unit(%__MODULE__{duration_unit: unit}), do: unit
+
+  @doc "Fetches a task by id."
+  @spec fetch_task(t(), Task.id()) :: {:ok, Task.t()} | :error
+  def fetch_task(%__MODULE__{tasks: tasks}, id), do: Map.fetch(tasks, id)
+
+  @doc "Gets a task by id, or `nil`."
+  @spec get_task(t(), Task.id()) :: Task.t() | nil
+  def get_task(%__MODULE__{tasks: tasks}, id), do: Map.get(tasks, id)
+
+  @doc """
+  Gets a task by its string key (see `key/1`), or `nil`.
+
+      iex> store = GanttEx.Store.new!([%{id: 7, start_date: ~D[2025-01-01]}])
+      iex> GanttEx.Store.task_by_key(store, "7").id
+      7
+  """
+  @spec task_by_key(t(), key()) :: Task.t() | nil
+  def task_by_key(%__MODULE__{} = store, key) do
+    case Map.fetch(store.task_keys, key) do
+      {:ok, id} -> Map.get(store.tasks, id)
+      :error -> nil
+    end
+  end
+
+  @doc "Fetches a link by id."
+  @spec fetch_link(t(), Task.id()) :: {:ok, Link.t()} | :error
+  def fetch_link(%__MODULE__{links: links}, id), do: Map.fetch(links, id)
+
+  @doc "Gets a link by id, or `nil`."
+  @spec get_link(t(), Task.id()) :: Link.t() | nil
+  def get_link(%__MODULE__{links: links}, id), do: Map.get(links, id)
+
+  @doc "Gets a link by its string key, or `nil`."
+  @spec link_by_key(t(), key()) :: Link.t() | nil
+  def link_by_key(%__MODULE__{} = store, key) do
+    case Map.fetch(store.link_keys, key) do
+      {:ok, id} -> Map.get(store.links, id)
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Returns all tasks in tree order (depth first).
+
+      iex> store = GanttEx.Store.new!([%{id: 2, parent: 1, start_date: ~D[2025-01-01]}, %{id: 1, start_date: ~D[2025-01-01]}, %{id: 3, start_date: ~D[2025-01-01]}])
+      iex> store |> GanttEx.Store.tasks() |> Enum.map(& &1.id)
+      [1, 2, 3]
+  """
+  @spec tasks(t()) :: [Task.t()]
+  def tasks(%__MODULE__{} = store) do
+    store |> descendant_ids(nil) |> Enum.map(&Map.fetch!(store.tasks, &1))
+  end
+
+  @doc "Returns all links in insertion order."
+  @spec links(t()) :: [Link.t()]
+  def links(%__MODULE__{} = store), do: Enum.map(store.link_order, &Map.fetch!(store.links, &1))
+
+  @doc "Returns the number of tasks."
+  @spec task_count(t()) :: non_neg_integer()
+  def task_count(%__MODULE__{tasks: tasks}), do: map_size(tasks)
+
+  @doc "Returns the ids of the direct children of `id` (`nil` for the root)."
+  @spec child_ids(t(), Task.id() | nil) :: [Task.id()]
+  def child_ids(%__MODULE__{children: children}, id), do: Map.get(children, id, [])
+
+  @doc "Returns the direct children of `id` (`nil` for the root)."
+  @spec children(t(), Task.id() | nil) :: [Task.t()]
+  def children(%__MODULE__{} = store, id),
+    do: store |> child_ids(id) |> Enum.map(&Map.fetch!(store.tasks, &1))
+
+  @doc "Returns `true` if the task has children."
+  @spec has_children?(t(), Task.id()) :: boolean()
+  def has_children?(%__MODULE__{} = store, id), do: child_ids(store, id) != []
+
+  @doc """
+  Returns the ids of all descendants of `id`, depth first.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, parent: 1, start_date: ~D[2025-01-01]}, %{id: 3, parent: 2, start_date: ~D[2025-01-01]}])
+      iex> GanttEx.Store.descendant_ids(store, 1)
+      [2, 3]
+  """
+  @spec descendant_ids(t(), Task.id() | nil) :: [Task.id()]
+  def descendant_ids(%__MODULE__{} = store, id) do
+    Enum.flat_map(child_ids(store, id), &[&1 | descendant_ids(store, &1)])
+  end
+
+  @doc """
+  Returns the ids of the ancestors of `id`, closest first.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, parent: 1, start_date: ~D[2025-01-01]}, %{id: 3, parent: 2, start_date: ~D[2025-01-01]}])
+      iex> GanttEx.Store.ancestor_ids(store, 3)
+      [2, 1]
+  """
+  @spec ancestor_ids(t(), Task.id()) :: [Task.id()]
+  def ancestor_ids(%__MODULE__{} = store, id) do
+    case get_task(store, id) do
+      %Task{parent: nil} -> []
+      %Task{parent: parent} -> [parent | ancestor_ids(store, parent)]
+      nil -> []
+    end
+  end
+
+  @doc "Returns the depth of a task (`0` for root tasks)."
+  @spec level(t(), Task.id()) :: non_neg_integer()
+  def level(%__MODULE__{} = store, id), do: length(ancestor_ids(store, id))
+
+  @doc "Returns the position of a task among its siblings."
+  @spec index(t(), Task.id()) :: non_neg_integer() | nil
+  def index(%__MODULE__{} = store, id) do
+    case get_task(store, id) do
+      nil -> nil
+      task -> Enum.find_index(child_ids(store, task.parent), &(&1 == id))
+    end
+  end
+
+  @doc "Returns the links where the task is the source or the target."
+  @spec links_for(t(), Task.id()) :: [Link.t()]
+  def links_for(%__MODULE__{} = store, id) do
+    store |> links() |> Enum.filter(&(&1.source == id or &1.target == id))
+  end
+
+  @doc """
+  Returns `{earliest_start, latest_end}` across all tasks, or `nil` when empty.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-03], duration: 2}, %{id: 2, start_date: ~D[2025-01-01], duration: 1}])
+      iex> GanttEx.Store.date_range(store)
+      {~N[2025-01-01 00:00:00], ~N[2025-01-05 00:00:00]}
+  """
+  @spec date_range(t()) :: {NaiveDateTime.t(), NaiveDateTime.t()} | nil
+  def date_range(%__MODULE__{tasks: tasks}) when map_size(tasks) == 0, do: nil
+
+  def date_range(%__MODULE__{tasks: tasks}) do
+    Enum.reduce(Map.values(tasks), {nil, nil}, fn task, {min, max} ->
+      {Dates.min(min, task.start_date), Dates.max(max, task.end_date)}
+    end)
+  end
+
+  @doc """
+  Returns the visible rows, in display order.
+
+  ## Options
+
+    * `:collapsed` - a `MapSet` of task ids whose children are hidden.
+    * `:filter` - a 1-arity function; only matching tasks (and their ancestors,
+      to keep the tree readable) are returned. Collapsed branches are expanded
+      while filtering.
+    * `:sort` - `{field, :asc | :desc}` to sort siblings by a task field or a
+      `:meta` key. The tree structure is preserved.
+
+  ## Examples
+
+      iex> store = GanttEx.Store.new!([
+      ...>   %{id: 1, text: "B", start_date: ~D[2025-01-01]},
+      ...>   %{id: 2, text: "child", parent: 1, start_date: ~D[2025-01-01]},
+      ...>   %{id: 3, text: "A", start_date: ~D[2025-01-01]}
+      ...> ])
+      iex> store |> GanttEx.Store.rows() |> Enum.map(&{&1.key, &1.level})
+      [{"1", 0}, {"2", 1}, {"3", 0}]
+      iex> store |> GanttEx.Store.rows(collapsed: MapSet.new([1])) |> Enum.map(& &1.key)
+      ["1", "3"]
+      iex> store |> GanttEx.Store.rows(sort: {:text, :asc}) |> Enum.map(& &1.task.text)
+      ["A", "B", "child"]
+      iex> store |> GanttEx.Store.rows(filter: &(&1.text == "child")) |> Enum.map(& &1.key)
+      ["1", "2"]
+  """
+  @spec rows(t(), keyword()) :: [row()]
+  def rows(%__MODULE__{} = store, opts \\ []) do
+    filter = Keyword.get(opts, :filter)
+    visible = if filter, do: matching_with_ancestors(store, filter)
+    collapsed = if filter, do: MapSet.new(), else: Keyword.get(opts, :collapsed, MapSet.new())
+
+    ctx = %{
+      store: store,
+      visible: visible,
+      collapsed: collapsed,
+      sort: Keyword.get(opts, :sort)
+    }
+
+    {rows, _index} = walk_rows(ctx, nil, nil, 0, {[], 0})
+    Enum.reverse(rows)
+  end
+
+  defp walk_rows(ctx, parent, parent_key, level, acc) do
+    ctx.store
+    |> children(parent)
+    |> sort_siblings(ctx.sort)
+    |> Enum.reduce(acc, fn task, {rows, index} ->
+      if ctx.visible && not MapSet.member?(ctx.visible, task.id) do
+        {rows, index}
+      else
+        key = key(task.id)
+        has_children = has_children?(ctx.store, task.id)
+        open = has_children and not MapSet.member?(ctx.collapsed, task.id)
+
+        row = %{
+          task: task,
+          key: key,
+          index: index,
+          level: level,
+          parent_key: parent_key,
+          has_children: has_children,
+          open: open
+        }
+
+        acc = {[row | rows], index + 1}
+        if open, do: walk_rows(ctx, task.id, key, level + 1, acc), else: acc
+      end
+    end)
+  end
+
+  defp matching_with_ancestors(store, filter) do
+    store
+    |> tasks()
+    |> Enum.filter(filter)
+    |> Enum.reduce(MapSet.new(), fn task, set ->
+      Enum.reduce([task.id | ancestor_ids(store, task.id)], set, &MapSet.put(&2, &1))
+    end)
+  end
+
+  defp sort_siblings(tasks, nil), do: tasks
+
+  defp sort_siblings(tasks, {field, direction}) do
+    Enum.sort_by(tasks, &sort_value(&1, field), sorter(direction))
+  end
+
+  defp sort_value(task, field) do
+    value =
+      if Map.has_key?(task, field), do: Map.get(task, field), else: Map.get(task.meta, field)
+
+    case value do
+      nil -> {1, nil}
+      %NaiveDateTime{} = dt -> {0, Dates.to_seconds(dt)}
+      value when is_binary(value) -> {0, String.downcase(value)}
+      value -> {0, value}
+    end
+  end
+
+  # nils always last, whatever the direction
+  defp sorter(:asc), do: fn {na, a}, {nb, b} -> {na, a} <= {nb, b} end
+  defp sorter(:desc), do: fn {na, a}, {nb, b} -> na < nb or (na == nb and a >= b) end
+
+  # -- task mutations ----------------------------------------------------------
+
+  @doc """
+  Adds a task. The parent is taken from the task's `:parent` field.
+
+  ## Options
+
+    * `:index` - position among its siblings. Defaults to appending.
+
+  ## Examples
+
+      iex> store = GanttEx.Store.new!([%{id: 1, type: :project, start_date: ~D[2025-01-01]}])
+      iex> {:ok, store, changes} = GanttEx.Store.add_task(store, %{id: 2, parent: 1, start_date: ~D[2025-01-02], duration: 4})
+      iex> Enum.map(changes, fn {type, task, _} -> {type, task.id} end)
+      [task_created: 2, task_updated: 1]
+      iex> GanttEx.Store.add_task(store, %{id: 3, parent: 99, start_date: ~D[2025-01-01]})
+      {:error, :missing_parent}
+  """
+  @spec add_task(t(), term(), keyword()) :: {:ok, t(), [change()]} | {:error, error()}
+  def add_task(%__MODULE__{} = store, attrs, opts \\ []) do
+    with {:ok, task} <- Task.new(attrs),
+         :ok <- check_new_id(store.tasks, task.id, :task),
+         :ok <- check_parent_exists(store, task.parent),
+         {:ok, task} <- schedule(task, store.duration_unit) do
+      store = %{
+        store
+        | tasks: Map.put(store.tasks, task.id, task),
+          task_keys: Map.put(store.task_keys, key(task.id), task.id),
+          children:
+            Map.update(
+              store.children,
+              task.parent,
+              [task.id],
+              &insert_at(&1, task.id, opts[:index])
+            )
+      }
+
+      {store, rollups} = rollup(store, [task.parent])
+      {:ok, store, [{:task_created, Map.fetch!(store.tasks, task.id), %{}} | rollups]}
+    end
+  end
+
+  @doc """
+  Updates a task with the given attributes.
+
+  Dates are kept consistent: changing only the start moves the task (the
+  duration is kept), changing the end or the duration resizes it. Changing
+  `:parent` moves the task to the end of its new parent.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01], duration: 2}])
+      iex> {:ok, store, [{:task_updated, task, %{changes: changes}}]} = GanttEx.Store.update_task(store, 1, %{start_date: ~D[2025-01-10]})
+      iex> {task.end_date, changes}
+      {~N[2025-01-12 00:00:00], %{start_date: ~N[2025-01-10 00:00:00], end_date: ~N[2025-01-12 00:00:00]}}
+      iex> GanttEx.Store.update_task(store, 1, %{end_date: ~D[2024-01-01]})
+      {:error, {:invalid, :end_date}}
+  """
+  @spec update_task(t(), Task.id(), map() | keyword()) ::
+          {:ok, t(), [change()]} | {:error, error()}
+  def update_task(%__MODULE__{} = store, id, attrs) do
+    {known, _meta} = Task.split(attrs)
+
+    with {:ok, old} <- fetch(store.tasks, id),
+         {:ok, changed} <- Task.change(old, Map.delete(known, :parent) |> merge_meta(attrs)),
+         {:ok, changed} <- schedule(changed, store.duration_unit, Map.keys(known)) do
+      store = put_in(store.tasks[id], changed)
+
+      {store, move_changes} =
+        case Map.fetch(known, :parent) do
+          {:ok, parent} when parent != old.parent -> move_for_update(store, id, parent)
+          _ -> {store, []}
+        end
+
+      new = Map.fetch!(store.tasks, id)
+      {store, rollups} = rollup(store, [new.parent])
+
+      changes =
+        case field_changes(old, %{new | parent: old.parent}, nil) do
+          diff when diff == %{} -> []
+          diff -> [{:task_updated, new, %{changes: diff}}]
+        end
+
+      {:ok, store, changes ++ move_changes ++ rollups}
+    end
+  end
+
+  defp merge_meta(known, attrs) do
+    {_known, meta} = Task.split(attrs)
+    Map.put(known, :meta, meta)
+  end
+
+  defp move_for_update(store, id, parent) do
+    case move_task(store, id, Task.new!(id: id, parent: parent).parent, nil) do
+      {:ok, store, changes} -> {store, changes}
+      {:error, _} -> {store, []}
+    end
+  end
+
+  @doc """
+  Deletes a task with all its descendants and every link attached to them.
+
+  Changes are reported links first, then tasks from the deepest descendant up
+  to the deleted task, then the updated parent projects.
+
+      iex> store = GanttEx.Store.new!(
+      ...>   [%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, parent: 1, start_date: ~D[2025-01-01]}, %{id: 3, start_date: ~D[2025-01-01]}],
+      ...>   [%{id: 10, source: 2, target: 3}]
+      ...> )
+      iex> {:ok, store, changes} = GanttEx.Store.delete_task(store, 1)
+      iex> Enum.map(changes, fn {type, entity, _} -> {type, entity.id} end)
+      [link_deleted: 10, task_deleted: 2, task_deleted: 1]
+      iex> GanttEx.Store.task_count(store)
+      1
+  """
+  @spec delete_task(t(), Task.id()) :: {:ok, t(), [change()]} | {:error, error()}
+  def delete_task(%__MODULE__{} = store, id) do
+    with {:ok, task} <- fetch(store.tasks, id) do
+      ids = [id | descendant_ids(store, id)]
+      id_set = MapSet.new(ids)
+
+      links =
+        store
+        |> links()
+        |> Enum.filter(&(MapSet.member?(id_set, &1.source) or MapSet.member?(id_set, &1.target)))
+
+      link_ids = Enum.map(links, & &1.id)
+      deleted = ids |> Enum.reverse() |> Enum.map(&Map.fetch!(store.tasks, &1))
+
+      store = %{
+        store
+        | tasks: Map.drop(store.tasks, ids),
+          task_keys: Map.drop(store.task_keys, Enum.map(ids, &key/1)),
+          children:
+            store.children
+            |> Map.drop(ids)
+            |> Map.update(task.parent, [], &List.delete(&1, id)),
+          links: Map.drop(store.links, link_ids),
+          link_keys: Map.drop(store.link_keys, Enum.map(link_ids, &key/1)),
+          link_order: store.link_order -- link_ids
+      }
+
+      {store, rollups} = rollup(store, [task.parent])
+
+      changes =
+        Enum.map(links, &{:link_deleted, &1, %{}}) ++
+          Enum.map(deleted, &{:task_deleted, &1, %{}}) ++ rollups
+
+      {:ok, store, changes}
+    end
+  end
+
+  @doc """
+  Moves a task under `parent` (`nil` for the root) at `index` among its new
+  siblings (`nil` appends). A task cannot be moved inside itself or one of its
+  descendants.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, start_date: ~D[2025-01-01]}, %{id: 3, start_date: ~D[2025-01-01]}])
+      iex> {:ok, store, [{:task_moved, _task, details}]} = GanttEx.Store.move_task(store, 3, nil, 0)
+      iex> details
+      %{parent: nil, index: 0, siblings: [3, 1, 2]}
+      iex> {:ok, store, _} = GanttEx.Store.move_task(store, 2, 1, nil)
+      iex> GanttEx.Store.move_task(store, 1, 2, nil)
+      {:error, :invalid_parent}
+  """
+  @spec move_task(t(), Task.id(), Task.id() | nil, non_neg_integer() | nil) ::
+          {:ok, t(), [change()]} | {:error, error()}
+  def move_task(%__MODULE__{} = store, id, parent, index) do
+    with {:ok, task} <- fetch(store.tasks, id),
+         :ok <- check_parent_exists(store, parent),
+         :ok <- check_not_descendant(store, id, parent) do
+      old_siblings = child_ids(store, task.parent)
+      children = Map.update!(store.children, task.parent, &List.delete(&1, id))
+      new_siblings = children |> Map.get(parent, []) |> insert_at(id, index)
+
+      if parent == task.parent and new_siblings == old_siblings do
+        {:ok, store, []}
+      else
+        store = %{
+          store
+          | tasks: Map.put(store.tasks, id, %{task | parent: parent}),
+            children: Map.put(children, parent, new_siblings)
+        }
+
+        {store, rollups} = rollup(store, [task.parent, parent])
+
+        moved =
+          {:task_moved, Map.fetch!(store.tasks, id),
+           %{
+             parent: parent,
+             index: Enum.find_index(new_siblings, &(&1 == id)),
+             siblings: new_siblings
+           }}
+
+        {:ok, store, [moved | rollups]}
+      end
+    end
+  end
+
+  # -- link mutations ----------------------------------------------------------
+
+  @doc """
+  Returns why a link cannot be added, or `nil` when it is valid.
+
+  A link is rejected when it connects a task to itself, references a missing
+  task, duplicates an existing dependency between the same tasks, or would
+  create a circular dependency.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, start_date: ~D[2025-01-01]}], [%{id: 1, source: 1, target: 2}])
+      iex> GanttEx.Store.link_error(store, GanttEx.Link.new!(id: 2, source: 2, target: 1))
+      :cycle
+      iex> GanttEx.Store.link_error(store, GanttEx.Link.new!(id: 2, source: 1, target: 1))
+      :self_link
+      iex> GanttEx.Store.link_error(store, GanttEx.Link.new!(id: 2, source: 1, target: 2))
+      :duplicate_link
+      iex> GanttEx.Store.link_error(store, GanttEx.Link.new!(id: 2, source: 1, target: 2, type: :start_to_start))
+      nil
+  """
+  @spec link_error(t(), Link.t()) :: nil | :self_link | :missing_task | :duplicate_link | :cycle
+  def link_error(%__MODULE__{} = store, %Link{} = link) do
+    others = store |> links() |> Enum.reject(&(&1.id == link.id))
+
+    cond do
+      link.source == link.target ->
+        :self_link
+
+      not Map.has_key?(store.tasks, link.source) or not Map.has_key?(store.tasks, link.target) ->
+        :missing_task
+
+      Enum.any?(
+        others,
+        &(&1.source == link.source and &1.target == link.target and &1.type == link.type)
+      ) ->
+        :duplicate_link
+
+      reachable?(others, link.target, link.source) ->
+        :cycle
+
+      true ->
+        nil
+    end
+  end
+
+  defp reachable?(links, from, to) do
+    graph = Enum.group_by(links, & &1.source, & &1.target)
+    do_reachable?(graph, [from], to, MapSet.new())
+  end
+
+  defp do_reachable?(_graph, [], _to, _seen), do: false
+  defp do_reachable?(_graph, [to | _], to, _seen), do: true
+
+  defp do_reachable?(graph, [node | rest], to, seen) do
+    if MapSet.member?(seen, node) do
+      do_reachable?(graph, rest, to, seen)
+    else
+      do_reachable?(graph, Map.get(graph, node, []) ++ rest, to, MapSet.put(seen, node))
+    end
+  end
+
+  @doc """
+  Adds a link.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, start_date: ~D[2025-01-01]}])
+      iex> {:ok, store, [{:link_created, link, %{}}]} = GanttEx.Store.add_link(store, %{id: "l1", source: 1, target: 2})
+      iex> link.type
+      :finish_to_start
+      iex> GanttEx.Store.add_link(store, %{id: "l2", source: 2, target: 1})
+      {:error, :cycle}
+  """
+  @spec add_link(t(), term()) :: {:ok, t(), [change()]} | {:error, error()}
+  def add_link(%__MODULE__{} = store, attrs) do
+    with {:ok, link} <- Link.new(attrs),
+         :ok <- check_new_id(store.links, link.id, :link),
+         nil <- link_error(store, link) do
+      {:ok, do_put_link(store, link), [{:link_created, link, %{}}]}
+    else
+      reason when is_atom(reason) -> {:error, reason}
+      error -> error
+    end
+  end
+
+  @doc """
+  Updates the `:type`, `:lag`, `:readonly`, `:color` or meta fields of a link.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, start_date: ~D[2025-01-01]}], [%{id: 1, source: 1, target: 2}])
+      iex> {:ok, _store, [{:link_updated, link, %{changes: changes}}]} = GanttEx.Store.update_link(store, 1, %{lag: 2})
+      iex> {link.lag, changes}
+      {2, %{lag: 2}}
+  """
+  @spec update_link(t(), Task.id(), map() | keyword()) ::
+          {:ok, t(), [change()]} | {:error, error()}
+  def update_link(%__MODULE__{} = store, id, attrs) do
+    with {:ok, old} <- fetch(store.links, id),
+         {:ok, link} <- Link.change(old, attrs),
+         nil <- link_error(store, link) do
+      case field_changes(old, link, nil) do
+        diff when diff == %{} -> {:ok, store, []}
+        diff -> {:ok, put_in(store.links[id], link), [{:link_updated, link, %{changes: diff}}]}
+      end
+    else
+      reason when is_atom(reason) -> {:error, reason}
+      error -> error
+    end
+  end
+
+  @doc """
+  Deletes a link.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01]}, %{id: 2, start_date: ~D[2025-01-01]}], [%{id: 1, source: 1, target: 2}])
+      iex> {:ok, store, [{:link_deleted, _link, %{}}]} = GanttEx.Store.delete_link(store, 1)
+      iex> GanttEx.Store.links(store)
+      []
+  """
+  @spec delete_link(t(), Task.id()) :: {:ok, t(), [change()]} | {:error, error()}
+  def delete_link(%__MODULE__{} = store, id) do
+    with {:ok, link} <- fetch(store.links, id) do
+      store = %{
+        store
+        | links: Map.delete(store.links, id),
+          link_keys: Map.delete(store.link_keys, key(id)),
+          link_order: List.delete(store.link_order, id)
+      }
+
+      {:ok, store, [{:link_deleted, link, %{}}]}
+    end
+  end
+
+  # -- serialization -----------------------------------------------------------
+
+  @doc """
+  Returns the data in the DHTMLX JSON shape: `%{data: [task_map], links: [link_map]}`.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, text: "A", start_date: ~D[2025-01-01]}])
+      iex> %{data: [task], links: []} = GanttEx.Store.to_data(store)
+      iex> Map.take(task, [:id, :text, :duration])
+      %{id: 1, text: "A", duration: 1}
+  """
+  @spec to_data(t()) :: %{data: [map()], links: [map()]}
+  def to_data(%__MODULE__{} = store) do
+    %{data: Enum.map(tasks(store), &Task.to_map/1), links: Enum.map(links(store), &Link.to_map/1)}
+  end
+
+  # -- helpers -----------------------------------------------------------------
+
+  defp do_put_link(store, link) do
+    %{
+      store
+      | links: Map.put(store.links, link.id, link),
+        link_keys: Map.put(store.link_keys, key(link.id), link.id),
+        link_order:
+          if(Map.has_key?(store.links, link.id),
+            do: store.link_order,
+            else: store.link_order ++ [link.id]
+          )
+    }
+  end
+
+  defp fetch(map, id) do
+    case Map.fetch(map, id) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:error, :not_found}
+    end
+  end
+
+  defp check_new_id(map, id, kind) do
+    if Map.has_key?(map, id), do: {:error, {:duplicate_id, kind, id}}, else: :ok
+  end
+
+  defp check_parent_exists(_store, nil), do: :ok
+
+  defp check_parent_exists(store, parent) do
+    if Map.has_key?(store.tasks, parent), do: :ok, else: {:error, :missing_parent}
+  end
+
+  defp check_not_descendant(_store, _id, nil), do: :ok
+
+  defp check_not_descendant(store, id, parent) do
+    if parent == id or id in ancestor_ids(store, parent),
+      do: {:error, :invalid_parent},
+      else: :ok
+  end
+
+  defp insert_at(list, item, nil), do: list ++ [item]
+  defp insert_at(list, item, index), do: List.insert_at(list, max(index, 0), item)
+
+  # Returns the fields (all struct fields but :id when `fields` is nil) that differ.
+  defp field_changes(old, new, fields) do
+    fields = fields || old |> Map.from_struct() |> Map.keys() |> List.delete(:id)
+
+    for field <- fields,
+        Map.get(old, field) != Map.get(new, field),
+        into: %{},
+        do: {field, Map.get(new, field)}
+  end
+end

@@ -1,0 +1,75 @@
+defmodule GanttEx.LiveCase do
+  @moduledoc false
+  # Helpers to test GanttEx.Live.Gantt hosted by GanttEx.Test.GanttLive.
+  use ExUnit.CaseTemplate
+
+  import Phoenix.LiveViewTest
+
+  @endpoint GanttEx.Test.Endpoint
+
+  using do
+    quote do
+      import Phoenix.LiveViewTest
+      import GanttEx.LiveCase
+
+      @endpoint GanttEx.Test.Endpoint
+    end
+  end
+
+  setup do
+    {:ok, conn: Phoenix.ConnTest.build_conn()}
+  end
+
+  @doc "Sample project: a project with two tasks, a milestone and a dependency."
+  def sample_tasks do
+    [
+      %{id: 1, text: "Website", type: :project, open: true},
+      %{
+        id: 2,
+        text: "Design",
+        parent: 1,
+        start_date: ~D[2025-01-06],
+        duration: 3,
+        progress: 0.5,
+        owner: "Ana"
+      },
+      %{id: 3, text: "Build", parent: 1, start_date: ~D[2025-01-09], duration: 5, owner: "Luis"},
+      %{id: 4, text: "Launch", type: :milestone, start_date: ~D[2025-01-16]}
+    ]
+  end
+
+  def sample_links do
+    [%{id: 1, source: 2, target: 3}, %{id: 2, source: 3, target: 4}]
+  end
+
+  @doc "Mounts the chart. Options are given to the component as attributes."
+  def mount_gantt(conn, opts \\ []) do
+    {tasks, opts} = Keyword.pop(opts, :tasks, sample_tasks())
+    {links, opts} = Keyword.pop(opts, :links, sample_links())
+
+    live_isolated(conn, GanttEx.Test.GanttLive,
+      session: %{
+        "tasks" => tasks,
+        "links" => links,
+        "opts" => Map.new(opts),
+        "test_pid" => self()
+      }
+    )
+  end
+
+  @doc "Runs `fun` inside the LiveView process (as the parent would) and waits for it."
+  def run_in_parent(view, fun) do
+    send(view.pid, {:run, fun})
+    # once for the message, once for the send_update it triggers
+    _ = :sys.get_state(view.pid)
+    _ = :sys.get_state(view.pid)
+    :ok
+  end
+
+  @doc "Waits for an event sent by the chart to its parent."
+  defmacro assert_gantt_event(pattern, timeout \\ 500) do
+    quote do
+      assert_receive {:gantt_event, unquote(pattern)}, unquote(timeout)
+    end
+  end
+end

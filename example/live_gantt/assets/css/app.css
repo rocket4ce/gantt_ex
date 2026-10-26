@@ -3,6 +3,7 @@
 
 @import "tailwindcss" source(none);
 @import "phoenix-colocated/live_gantt/colocated.css";
+@import "phoenix-colocated/gantt_ex/colocated.css";
 @source "../css";
 @source "../js";
 @source "../../lib/live_gantt_web";
