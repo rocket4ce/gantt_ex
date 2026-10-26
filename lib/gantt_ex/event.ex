@@ -30,6 +30,9 @@ defmodule GanttEx.Event do
       and `:siblings` (ordered ids of the new siblings) describe where.
     * `:link_created`, `:link_updated`, `:link_deleted` - `:link` holds the link,
       `:changes` the changed fields for updates.
+    * `:branch_requested` - the user expanded a task with `has_children: true`
+      whose children are not loaded yet: load them and render the component
+      with them (dynamic loading).
     * `:task_selected` - the user selected a task (`:task`). `:selection` holds
       the ids of every selected task (Ctrl/Cmd+click and Shift+click select
       several).
@@ -51,6 +54,7 @@ defmodule GanttEx.Event do
           | :link_updated
           | :link_deleted
           | :task_selected
+          | :branch_requested
 
   @type t :: %__MODULE__{
           gantt_id: String.t(),

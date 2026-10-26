@@ -66,6 +66,8 @@ defmodule GanttEx.Live.Gantt do
     * `:resources` - the resources tasks are assigned to (see `GanttEx.Resource`).
       Tasks list their assignments in `:resources`; the lightbox gets a
       `:resources` section and grids can show a `:resources` column.
+    * `:auto_types` - tasks with children become projects and projects
+      without children become tasks. Defaults to `false`.
     * `:group_by` - group the tasks under virtual rows: a task field (`:type`),
       a `:meta` key (`:owner`), `:resources` (a task appears under each of its
       resources) or a function returning the group(s) of a task.
@@ -220,6 +222,7 @@ defmodule GanttEx.Live.Gantt do
     resource_panel: false,
     group_by: nil,
     group_label: nil,
+    auto_types: false,
     export_filename: "gantt",
     theme: "auto",
     class: nil,
@@ -287,7 +290,8 @@ defmodule GanttEx.Live.Gantt do
        viewport: %{top: 0, height: 900},
        history: History.new(),
        show_critical: nil,
-       analysis: nil
+       analysis: nil,
+       loading: MapSet.new()
      )}
   end
 
@@ -333,7 +337,8 @@ defmodule GanttEx.Live.Gantt do
       duration_unit: socket.assigns.duration_unit,
       work_time: socket.assigns.work_time,
       calendar: socket.assigns.calendar,
-      calendars: socket.assigns.calendars
+      calendars: socket.assigns.calendars,
+      auto_types: socket.assigns.auto_types
     ]
 
     source = {tasks, links, store_opts}
@@ -384,7 +389,15 @@ defmodule GanttEx.Live.Gantt do
           do: socket.assigns.link_editor
         ),
       lightbox_state: lightbox,
-      editing: nil
+      editing: nil,
+      # branches stop loading once their children arrived (or they are gone)
+      loading:
+        MapSet.filter(socket.assigns.loading, fn key ->
+          case Store.task_by_key(store, key) do
+            nil -> false
+            task -> Store.child_ids(store, task.id) == []
+          end
+        end)
     )
   end
 
@@ -464,6 +477,7 @@ defmodule GanttEx.Live.Gantt do
       )
       |> Enum.map(&Map.put(&1, :selected, MapSet.member?(selection, &1.key)))
       |> Enum.map(&Map.put(&1, :slack, analysis && analysis.tasks[&1.task.id]))
+      |> Enum.map(&Map.put(&1, :loading, MapSet.member?(a.loading, &1.key)))
 
     timeline = build_timeline(a, level, today)
 
@@ -1003,7 +1017,7 @@ defmodule GanttEx.Live.Gantt do
     socket =
       case Enum.find(socket.assigns.rows, &(&1.key == key and &1.has_children)) do
         nil -> socket
-        row -> socket |> toggle_row(row) |> assign(quick_info_key: nil)
+        row -> socket |> open_or_toggle(row) |> assign(quick_info_key: nil)
       end
 
     {:noreply, prepare(socket)}
@@ -1874,9 +1888,26 @@ defmodule GanttEx.Live.Gantt do
     |> Enum.find(index, &(not Enum.at(rows, &1)[:group]))
   end
 
+  # Branches whose children are not loaded yet are requested from the parent.
+  defp open_or_toggle(socket, row) do
+    a = socket.assigns
+
+    if row.task.has_children and Store.child_ids(a.store, row.task.id) == [] do
+      if not MapSet.member?(a.loading, row.key),
+        do: notify(socket, %Event{gantt_id: a.id, type: :branch_requested, task: row.task})
+
+      assign(socket,
+        loading: MapSet.put(a.loading, row.key),
+        collapsed: MapSet.delete(a.collapsed, row.task.id)
+      )
+    else
+      toggle_row(socket, row)
+    end
+  end
+
   defp expand_or_descend(socket, row, index) do
     cond do
-      row.has_children and not row.open -> prepare(toggle_row(socket, row))
+      row.has_children and not row.open -> prepare(open_or_toggle(socket, row))
       row.has_children -> select_row(socket, index + 1)
       true -> socket
     end

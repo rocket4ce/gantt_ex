@@ -161,26 +161,5 @@ defmodule GanttEx.Scheduler do
       [{:task_updated, b, %{changes: %{start_date: 1, end_date: 2}}}]
   """
   @spec compact([Store.change()]) :: [Store.change()]
-  def compact(changes) do
-    {order, merged} =
-      Enum.reduce(changes, {[], %{}}, fn
-        {:task_updated, task, %{changes: diff}} = change, {order, merged} ->
-          key = {:task_updated, task.id}
-
-          case Map.fetch(merged, key) do
-            {:ok, {:task_updated, _old, %{changes: old_diff}}} ->
-              {order,
-               Map.put(merged, key, {:task_updated, task, %{changes: Map.merge(old_diff, diff)}})}
-
-            :error ->
-              {[key | order], Map.put(merged, key, change)}
-          end
-
-        change, {order, merged} ->
-          key = make_ref()
-          {[key | order], Map.put(merged, key, change)}
-      end)
-
-    order |> Enum.reverse() |> Enum.map(&Map.fetch!(merged, &1))
-  end
+  def compact(changes), do: Store.compact(changes)
 end

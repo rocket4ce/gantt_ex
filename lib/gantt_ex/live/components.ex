@@ -373,7 +373,7 @@ defmodule GanttEx.Live.Components do
     <button
       :if={@row.has_children}
       type="button"
-      class={["gx-toggle", @row.open && "gx-toggle--open"]}
+      class={["gx-toggle", @row.open && "gx-toggle--open", @row[:loading] && "gx-toggle--loading"]}
       aria-label={if(@row.open, do: @ctx.labels.collapse, else: @ctx.labels.expand)}
       phx-click="toggle"
       phx-value-key={@row.key}

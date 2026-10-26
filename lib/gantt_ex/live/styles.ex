@@ -619,6 +619,24 @@ defmodule GanttEx.Live.Styles do
         transition: transform 0.18s var(--gx-ease);
       }
 
+      .gx-toggle--loading .gx-icon {
+        display: none;
+      }
+
+      .gx-toggle--loading::after {
+        content: "";
+        width: 11px;
+        height: 11px;
+        border: 2px solid var(--gx-border);
+        border-top-color: var(--gx-accent);
+        border-radius: 50%;
+        animation: gx-spin 0.7s linear infinite;
+      }
+
+      @keyframes gx-spin {
+        to { transform: rotate(360deg); }
+      }
+
       .gx-toggle--open .gx-icon {
         transform: rotate(90deg);
       }

@@ -43,7 +43,8 @@ defmodule GanttEx.Store do
             duration_unit: :day,
             work_time: false,
             calendar: nil,
-            calendars: %{}
+            calendars: %{},
+            auto_types: false
 
   @typedoc "A string version of an id, as used in the DOM and in client events."
   @type key :: String.t()
@@ -86,7 +87,8 @@ defmodule GanttEx.Store do
           duration_unit: Dates.unit(),
           work_time: boolean(),
           calendar: Calendar.t() | nil,
-          calendars: %{term() => Calendar.t()}
+          calendars: %{term() => Calendar.t()},
+          auto_types: boolean()
         }
 
   @typedoc "A visible row, as returned by `rows/2`."
@@ -120,6 +122,8 @@ defmodule GanttEx.Store do
     * `:calendar` - the global calendar (a `GanttEx.Calendar` or its options).
       Defaults to Monday to Friday, 08:00-12:00 and 13:00-17:00.
     * `:calendars` - other calendars, referenced by the `:calendar_id` of tasks.
+    * `:auto_types` - tasks with children become projects and projects without
+      children become tasks, also after every mutation. Defaults to `false`.
 
   Dates are completed as follows: when both `:start_date` and `:end_date` are
   given the duration is computed (the end date wins over a given duration);
@@ -165,6 +169,9 @@ defmodule GanttEx.Store do
       }
 
       with :ok <- check_reachable(store) do
+        store =
+          if store.auto_types, do: store |> retype(Map.keys(store.tasks)) |> elem(0), else: store
+
         store = rollup_all(store)
 
         with :ok <- check_dates(store) do
@@ -225,7 +232,8 @@ defmodule GanttEx.Store do
          duration_unit: Keyword.get(opts, :duration_unit, :day),
          work_time: work_time,
          calendar: if(work_time, do: calendar),
-         calendars: calendars
+         calendars: calendars,
+         auto_types: Keyword.get(opts, :auto_types, false)
        }}
     end
   end
@@ -420,6 +428,68 @@ defmodule GanttEx.Store do
       _ ->
         store
     end
+  end
+
+  # With auto types, a task with children is a project and a project without
+  # children is a task.
+  defp retype(%__MODULE__{auto_types: false} = store, _ids), do: {store, []}
+
+  defp retype(store, ids) do
+    ids
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.reduce({store, []}, fn id, {store, changes} ->
+      with %Task{} = task <- Map.get(store.tasks, id),
+           type when type != task.type <- expected_type(store, task) do
+        task = %{task | type: type}
+
+        {put_in(store.tasks[id], task),
+         changes ++ [{:task_updated, task, %{changes: %{type: type}}}]}
+      else
+        _ -> {store, changes}
+      end
+    end)
+  end
+
+  defp expected_type(store, task) do
+    cond do
+      has_children?(store, task.id) -> :project
+      task.type == :project -> :task
+      true -> task.type
+    end
+  end
+
+  @doc """
+  Merges repeated `:task_updated` changes of the same task, keeping the
+  position of the first one and the last value.
+
+      iex> a = GanttEx.Task.new!(id: 1, text: "A")
+      iex> b = %{a | text: "B"}
+      iex> GanttEx.Store.compact([{:task_updated, a, %{changes: %{start_date: 1}}}, {:task_updated, b, %{changes: %{end_date: 2}}}])
+      [{:task_updated, b, %{changes: %{start_date: 1, end_date: 2}}}]
+  """
+  @spec compact([change()]) :: [change()]
+  def compact(changes) do
+    {order, merged} =
+      Enum.reduce(changes, {[], %{}}, fn
+        {:task_updated, task, %{changes: diff}} = change, {order, merged} ->
+          key = {:task_updated, task.id}
+
+          case Map.fetch(merged, key) do
+            {:ok, {:task_updated, _old, %{changes: old_diff}}} ->
+              {order,
+               Map.put(merged, key, {:task_updated, task, %{changes: Map.merge(old_diff, diff)}})}
+
+            :error ->
+              {[key | order], Map.put(merged, key, change)}
+          end
+
+        change, {order, merged} ->
+          key = make_ref()
+          {[key | order], Map.put(merged, key, change)}
+      end)
+
+    order |> Enum.reverse() |> Enum.map(&Map.fetch!(merged, &1))
   end
 
   # Recomputes the given projects and all their ancestors (deepest first) and
@@ -750,8 +820,10 @@ defmodule GanttEx.Store do
         {rows, index}
       else
         key = key(task.id)
-        has_children = has_children?(ctx.store, task.id)
-        open = has_children and not MapSet.member?(ctx.collapsed, task.id)
+        loaded = has_children?(ctx.store, task.id)
+        # `has_children: true` marks a branch whose children are not loaded yet
+        has_children = loaded or task.has_children
+        open = loaded and not MapSet.member?(ctx.collapsed, task.id)
 
         row = %{
           task: task,
@@ -864,8 +936,11 @@ defmodule GanttEx.Store do
             )
       }
 
+      {store, retyped} = retype(store, [task.parent])
       {store, rollups} = rollup(store, [task.parent])
-      {:ok, store, [{:task_created, Map.fetch!(store.tasks, task.id), %{}} | rollups]}
+
+      {:ok, store,
+       [{:task_created, Map.fetch!(store.tasks, task.id), %{}} | compact(retyped ++ rollups)]}
     end
   end
 
@@ -968,11 +1043,12 @@ defmodule GanttEx.Store do
           link_order: store.link_order -- link_ids
       }
 
+      {store, retyped} = retype(store, [task.parent])
       {store, rollups} = rollup(store, [task.parent])
 
       changes =
         Enum.map(links, &{:link_deleted, &1, %{}}) ++
-          Enum.map(deleted, &{:task_deleted, &1, %{}}) ++ rollups
+          Enum.map(deleted, &{:task_deleted, &1, %{}}) ++ compact(retyped ++ rollups)
 
       {:ok, store, changes}
     end
@@ -1010,7 +1086,9 @@ defmodule GanttEx.Store do
             children: Map.put(children, parent, new_siblings)
         }
 
+        {store, retyped} = retype(store, [task.parent, parent])
         {store, rollups} = rollup(store, [task.parent, parent])
+        rollups = compact(retyped ++ rollups)
 
         moved =
           {:task_moved, Map.fetch!(store.tasks, id),
