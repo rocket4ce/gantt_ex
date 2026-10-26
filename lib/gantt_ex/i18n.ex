@@ -148,6 +148,18 @@ defmodule GanttEx.I18n do
         finish_to_finish: gettext("Finish to finish"),
         start_to_finish: gettext("Start to finish"),
         link_rejected: gettext("This dependency is not allowed"),
+        # constraints
+        constraint: gettext("Constraint"),
+        constraint_type: gettext("Constraint type"),
+        constraint_date: gettext("Constraint date"),
+        asap: gettext("As soon as possible"),
+        alap: gettext("As late as possible"),
+        snet: gettext("Start no earlier than"),
+        snlt: gettext("Start no later than"),
+        fnet: gettext("Finish no earlier than"),
+        fnlt: gettext("Finish no later than"),
+        mso: gettext("Must start on"),
+        mfo: gettext("Must finish on"),
         # confirmation
         confirm_delete_task: gettext("Are you sure you want to delete this task?"),
         confirm_delete_subtasks: gettext("Its subtasks will be deleted too."),

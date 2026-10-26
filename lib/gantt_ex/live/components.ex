@@ -417,13 +417,29 @@ defmodule GanttEx.Live.Components do
   @doc false
   def cell_value(task, %{field: field}, ctx) do
     case field do
-      :text -> task.text
-      :start_date -> ctx.format.(task.start_date, ctx.date_pattern)
-      :end_date -> ctx.format.(TaskForm.display_end(task, ctx.unit), ctx.date_pattern)
-      :duration -> to_string(task.duration)
-      :progress -> "#{round(task.progress * 100)}%"
-      :type -> Map.fetch!(ctx.labels, task.type)
-      field -> task.meta |> meta_value(field) |> to_string()
+      :text ->
+        task.text
+
+      :start_date ->
+        ctx.format.(task.start_date, ctx.date_pattern)
+
+      :end_date ->
+        ctx.format.(TaskForm.display_end(task, ctx.unit), ctx.date_pattern)
+
+      :duration ->
+        to_string(task.duration)
+
+      :progress ->
+        "#{round(task.progress * 100)}%"
+
+      :type ->
+        Map.fetch!(ctx.labels, task.type)
+
+      :constraint_type ->
+        if(task.constraint_type, do: Map.fetch!(ctx.labels, task.constraint_type), else: "")
+
+      field ->
+        task.meta |> meta_value(field) |> to_string()
     end
   end
 
@@ -578,6 +594,12 @@ defmodule GanttEx.Live.Components do
         <span class="gx-handle gx-handle--end" data-gx-handle="end"></span>
       <% end %>
       <span :if={@bar.progress_editable} class="gx-progress-handle" data-gx-progress-handle></span>
+      <span
+        :if={@bar[:constraint_x]}
+        class={["gx-constraint", "gx-constraint--#{@bar.task.constraint_type}"]}
+        style={"left: #{px(@bar.constraint_x)}"}
+        title={"#{Map.fetch!(@ctx.labels, @bar.task.constraint_type)} · #{@ctx.format.(@bar.task.constraint_date, @ctx.date_pattern)}"}
+      ></span>
       <%= if @bar.linkable do %>
         <span class="gx-link-point gx-link-point--start" data-gx-link-point="start"></span>
         <span class="gx-link-point gx-link-point--end" data-gx-link-point="end"></span>
@@ -835,6 +857,28 @@ defmodule GanttEx.Live.Components do
                   type="number"
                   min="0"
                   label={"#{@ctx.labels.duration} (#{GanttEx.I18n.duration(0, @ctx.unit, @ctx.locale) |> String.replace(~r/^0\s*/, "")})"}
+                />
+              </div>
+            </fieldset>
+            <fieldset :if={:constraint in @sections} class="gx-fieldset">
+              <legend>{@ctx.labels.constraint}</legend>
+              <div class="gx-field-row">
+                <.field
+                  field={@lightbox.form[:constraint_type]}
+                  type="select"
+                  label={@ctx.labels.constraint_type}
+                  options={
+                    for type <- GanttEx.Task.constraint_types(),
+                        do:
+                          {Map.fetch!(@ctx.labels, type),
+                           if(type == :asap, do: "", else: Atom.to_string(type))}
+                  }
+                />
+                <.field
+                  :if={@lightbox.form[:constraint_type].value not in [nil, "", "asap", "alap"]}
+                  field={@lightbox.form[:constraint_date]}
+                  type={TaskForm.date_input_type(@ctx.unit)}
+                  label={@ctx.labels.constraint_date}
                 />
               </div>
             </fieldset>

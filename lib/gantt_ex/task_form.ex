@@ -8,7 +8,7 @@ defmodule GanttEx.TaskForm do
 
       iex> task = GanttEx.Task.new!(id: 1, text: "Design", start_date: ~D[2025-01-06], duration: 3, progress: 0.4)
       iex> GanttEx.TaskForm.params(task, :day)
-      %{"text" => "Design", "type" => "task", "start_date" => "2025-01-06", "duration" => "3", "progress" => "40", "parent" => ""}
+      %{"text" => "Design", "type" => "task", "start_date" => "2025-01-06", "duration" => "3", "progress" => "40", "parent" => "", "constraint_type" => "", "constraint_date" => ""}
 
       iex> GanttEx.TaskForm.cast(%{"text" => " Build ", "type" => "task", "start_date" => "2025-01-08", "duration" => "2", "progress" => "25"}, :day)
       {:ok, %{text: "Build", type: :task, start_date: ~N[2025-01-08 00:00:00], duration: 2, progress: 0.25}}
@@ -104,7 +104,10 @@ defmodule GanttEx.TaskForm do
       "start_date" => input_date(task.start_date, unit),
       "duration" => to_string(task.duration || 0),
       "progress" => task.progress |> Kernel.*(100) |> round() |> Integer.to_string(),
-      "parent" => if(task.parent, do: Store.key(task.parent), else: "")
+      "parent" => if(task.parent, do: Store.key(task.parent), else: ""),
+      "constraint_type" =>
+        if(task.constraint_type, do: Atom.to_string(task.constraint_type), else: ""),
+      "constraint_date" => input_date(task.constraint_date, unit)
     }
   end
 
@@ -122,13 +125,24 @@ defmodule GanttEx.TaskForm do
   @spec cast(map(), Dates.unit(), Store.t() | nil) :: {:ok, map()} | {:error, keyword(atom())}
   def cast(params, unit, store \\ nil) do
     {attrs, errors} =
-      [:text, :type, :start_date, :duration, :progress, :parent]
+      [
+        :text,
+        :type,
+        :start_date,
+        :duration,
+        :progress,
+        :parent,
+        :constraint_type,
+        :constraint_date
+      ]
       |> Enum.reduce({%{}, []}, fn field, acc ->
         cast_param(acc, field, Map.fetch(params, Atom.to_string(field)), unit, store)
       end)
 
     attrs =
       if attrs[:type] == :milestone, do: Map.put(attrs, :duration, 0), else: attrs
+
+    {attrs, errors} = check_constraint(attrs, errors)
 
     case errors do
       [] -> {:ok, attrs}
@@ -137,6 +151,20 @@ defmodule GanttEx.TaskForm do
   end
 
   defp cast_param({attrs, errors}, _field, :error, _unit, _store), do: {attrs, errors}
+
+  defp cast_param({attrs, errors}, :constraint_type, {:ok, value}, _unit, _store) do
+    case Task.cast_constraint(value) do
+      {:ok, type} -> {Map.put(attrs, :constraint_type, type), errors}
+      :error -> {attrs, [{:constraint_type, :required} | errors]}
+    end
+  end
+
+  defp cast_param({attrs, errors}, :constraint_date, {:ok, value}, _unit, _store) do
+    case Dates.cast(value) do
+      {:ok, date} -> {Map.put(attrs, :constraint_date, date), errors}
+      :error -> {attrs, [{:constraint_date, :invalid_date} | errors]}
+    end
+  end
 
   defp cast_param({attrs, errors}, :text, {:ok, text}, _unit, _store) do
     case String.trim(text || "") do
@@ -187,4 +215,17 @@ defmodule GanttEx.TaskForm do
         end
     end
   end
+
+  # Dated constraints need a date; the others ignore it.
+  defp check_constraint(%{constraint_type: type} = attrs, errors)
+       when type in [:snet, :snlt, :fnet, :fnlt, :mso, :mfo] do
+    if attrs[:constraint_date] || Keyword.has_key?(errors, :constraint_date),
+      do: {attrs, errors},
+      else: {attrs, [{:constraint_date, :required} | errors]}
+  end
+
+  defp check_constraint(%{constraint_type: _} = attrs, errors),
+    do: {Map.put(attrs, :constraint_date, nil), errors}
+
+  defp check_constraint(attrs, errors), do: {attrs, errors}
 end

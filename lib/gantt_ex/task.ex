@@ -16,6 +16,8 @@ defmodule GanttEx.Task do
     * `:readonly` - disables editing for this task.
     * `:color`, `:text_color`, `:progress_color` - optional CSS colors.
     * `:calendar_id` - the working-time calendar of the task (see `GanttEx.Calendar`).
+    * `:constraint_type`, `:constraint_date` - scheduling constraint used by
+      auto-scheduling (see `GanttEx.Scheduler` and `constraint_types/0`).
     * `:meta` - any additional fields (for custom grid columns, templates, ...).
 
   Only one or two of `:start_date`, `:end_date` and `:duration` are needed: the
@@ -60,7 +62,9 @@ defmodule GanttEx.Task do
     :color,
     :text_color,
     :progress_color,
-    :calendar_id
+    :calendar_id,
+    :constraint_type,
+    :constraint_date
   ]
 
   @aliases %{parent_id: :parent}
@@ -81,6 +85,8 @@ defmodule GanttEx.Task do
             text_color: nil,
             progress_color: nil,
             calendar_id: nil,
+            constraint_type: nil,
+            constraint_date: nil,
             meta: %{}
 
   @typedoc "A task or link identifier."
@@ -88,6 +94,12 @@ defmodule GanttEx.Task do
 
   @typedoc "The kind of task."
   @type type :: :task | :project | :milestone
+
+  @typedoc """
+  A scheduling constraint: as soon/late as possible, start/finish no
+  earlier/later than a date, or must start/finish on a date.
+  """
+  @type constraint :: :asap | :alap | :snet | :snlt | :fnet | :fnlt | :mso | :mfo
 
   @typedoc "Casting errors returned by `new/1` and `change/2`."
   @type error :: {:missing, atom()} | {:invalid, atom()}
@@ -107,8 +119,43 @@ defmodule GanttEx.Task do
           text_color: String.t() | nil,
           progress_color: String.t() | nil,
           calendar_id: term(),
+          constraint_type: constraint() | nil,
+          constraint_date: NaiveDateTime.t() | nil,
           meta: map()
         }
+
+  @constraints [:asap, :alap, :snet, :snlt, :fnet, :fnlt, :mso, :mfo]
+
+  @doc """
+  Returns the supported constraint types.
+
+      iex> GanttEx.Task.constraint_types()
+      [:asap, :alap, :snet, :snlt, :fnet, :fnlt, :mso, :mfo]
+  """
+  @spec constraint_types() :: [constraint()]
+  def constraint_types, do: @constraints
+
+  @doc """
+  Casts a constraint type (DHTMLX codes such as `"snet"` or atoms).
+
+      iex> GanttEx.Task.cast_constraint("mso")
+      {:ok, :mso}
+
+      iex> GanttEx.Task.cast_constraint("")
+      {:ok, nil}
+  """
+  @spec cast_constraint(term()) :: {:ok, constraint() | nil} | :error
+  def cast_constraint(value) when value in [nil, ""], do: {:ok, nil}
+  def cast_constraint(value) when value in @constraints, do: {:ok, value}
+
+  def cast_constraint(value) when is_binary(value) do
+    case Enum.find(@constraints, &(Atom.to_string(&1) == String.downcase(value))) do
+      nil -> :error
+      constraint -> {:ok, constraint}
+    end
+  end
+
+  def cast_constraint(_value), do: :error
 
   @doc """
   Returns the supported task types.
@@ -242,7 +289,10 @@ defmodule GanttEx.Task do
   defp cast_field(:text, text) when is_atom(text) or is_number(text), do: {:ok, to_string(text)}
   defp cast_field(:text, _text), do: :error
 
-  defp cast_field(key, value) when key in [:start_date, :end_date], do: Dates.cast(value)
+  defp cast_field(key, value) when key in [:start_date, :end_date, :constraint_date],
+    do: Dates.cast(value)
+
+  defp cast_field(:constraint_type, value), do: cast_constraint(value)
   defp cast_field(:type, value), do: cast_type(value)
   defp cast_field(:parent, value), do: {:ok, cast_parent(value)}
   defp cast_field(:calendar_id, value), do: {:ok, if(value == "", do: nil, else: value)}

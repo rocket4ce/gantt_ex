@@ -1041,6 +1041,25 @@ defmodule GanttEx.Live.Styles do
         opacity: 1;
       }
 
+      .gx-constraint {
+        position: absolute;
+        top: -5px;
+        bottom: -5px;
+        z-index: 1;
+        width: 0;
+        border-left: 2px solid var(--gx-danger);
+        pointer-events: auto;
+      }
+
+      .gx-constraint::before {
+        content: "";
+        position: absolute;
+        top: -2px;
+        left: -5px;
+        border: 4px solid transparent;
+        border-top-color: var(--gx-danger);
+      }
+
       .gx-link-point {
         position: absolute;
         top: 50%;

@@ -106,6 +106,7 @@ defmodule GanttEx.Live.Columns do
   defp label(:progress, labels), do: labels.progress
   defp label(:type, labels), do: labels.type
   defp label(:wbs, labels), do: labels.wbs
+  defp label(:constraint_type, labels), do: labels.constraint
   defp label(:add, _labels), do: ""
 
   defp label(field, _labels),
@@ -114,6 +115,7 @@ defmodule GanttEx.Live.Columns do
   defp width(:text), do: 220
   defp width(:add), do: 44
   defp width(:wbs), do: 64
+  defp width(:constraint_type), do: 150
   defp width(field) when field in [:duration, :progress], do: 76
   defp width(_field), do: 104
 

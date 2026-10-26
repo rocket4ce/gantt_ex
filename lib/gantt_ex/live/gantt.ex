@@ -54,6 +54,11 @@ defmodule GanttEx.Live.Gantt do
     * `:tooltips` - show tooltips when hovering bars. Defaults to `true`.
     * `:reorder` - drag rows in the grid to reorder or re-parent tasks. Defaults to `true`.
     * `:links_editable` - draw and edit dependencies. Defaults to `true`.
+    * `:auto_scheduling` - after every change, move tasks so that dependencies
+      and constraints hold (see `GanttEx.Scheduler`). The lightbox gets a
+      constraint section. Defaults to `false`.
+    * `:auto_scheduling_strict` - also move tasks earlier, to their earliest
+      possible date. Defaults to `false`.
     * `:undo` - undo and redo with the toolbar or Ctrl/Cmd+Z and
       Ctrl/Cmd+Shift+Z (Ctrl+Y). Undone changes are reported as events too.
       Defaults to `true`.
@@ -152,7 +157,7 @@ defmodule GanttEx.Live.Gantt do
     TaskForm
   }
 
-  alias GanttEx.{Marker, Timeline, Zoom}
+  alias GanttEx.{Marker, Scheduler, Timeline, Zoom}
   alias GanttEx.Live.{Columns, Interaction}
 
   @hook "GanttEx.Live.Hook.Gantt"
@@ -190,6 +195,8 @@ defmodule GanttEx.Live.Gantt do
     markers: [],
     today_marker: false,
     undo: true,
+    auto_scheduling: false,
+    auto_scheduling_strict: false,
     export_filename: "gantt",
     theme: "auto",
     class: nil,
@@ -423,7 +430,7 @@ defmodule GanttEx.Live.Gantt do
     layout =
       Layout.build(a.store, rows, timeline, row_height: a.row_height, bar_height: bar_height)
 
-    bars = Enum.map(layout.bars, &decorate_bar(&1, a))
+    bars = Enum.map(layout.bars, &decorate_bar(&1, Map.put(a, :timeline, timeline)))
     columns = Columns.build(a.column, a.labels, widths: a.column_widths, readonly: a.readonly)
     grid_width = grid_width(a, columns)
     chart_height = max(layout.height, 0)
@@ -558,9 +565,22 @@ defmodule GanttEx.Live.Gantt do
       resizable: editable and not summary and task.type != :milestone,
       progress_editable: editable and task.type != :milestone,
       linkable: not a.readonly and a.links_editable,
-      class: a.task_class && a.task_class.(task)
+      class: a.task_class && a.task_class.(task),
+      constraint_x: constraint_x(task, bar, a)
     })
   end
+
+  # Position of the constraint date relative to the bar, to draw a tick.
+  defp constraint_x(
+         %Task{constraint_type: type, constraint_date: %NaiveDateTime{} = date},
+         bar,
+         a
+       )
+       when type in [:snet, :snlt, :fnet, :fnlt, :mso, :mfo] do
+    Timeline.x(a.timeline, date) - bar.x
+  end
+
+  defp constraint_x(_task, _bar, _a), do: nil
 
   defp scale_rows(timeline, a, today) do
     minor = List.last(timeline.scales)
@@ -790,7 +810,7 @@ defmodule GanttEx.Live.Gantt do
         :if={@lightbox_state}
         ctx={@ctx}
         lightbox={@lightbox_state}
-        sections={@lightbox_sections}
+        sections={lightbox_sections(@lightbox_sections, @auto_scheduling)}
       >
         <:extra :let={form}>{render_slot(@lightbox_fields, form)}</:extra>
       </.lightbox>
@@ -799,6 +819,12 @@ defmodule GanttEx.Live.Gantt do
     </div>
     """
   end
+
+  defp lightbox_sections(sections, true) do
+    if :constraint in sections, do: sections, else: sections ++ [:constraint]
+  end
+
+  defp lightbox_sections(sections, _auto_scheduling), do: sections
 
   defp editing_field({key, field}, key), do: field
   defp editing_field(_editing, _key), do: nil
@@ -1732,6 +1758,8 @@ defmodule GanttEx.Live.Gantt do
   # -- helpers: results and notifications --------------------------------------
 
   defp apply_result(socket, {:ok, store, changes}) do
+    {store, changes} = auto_schedule(socket.assigns, store, changes)
+
     history =
       if changes != [] and socket.assigns.undo,
         do: History.record(socket.assigns.history, socket.assigns.store),
@@ -1744,6 +1772,15 @@ defmodule GanttEx.Live.Gantt do
   defp apply_result(socket, {:error, reason}) do
     assign(socket, notice: error_message(reason, socket.assigns.labels))
   end
+
+  # With auto-scheduling, every change is followed by a scheduling pass whose
+  # moves belong to the same undo step.
+  defp auto_schedule(%{auto_scheduling: true} = a, store, [_ | _] = changes) do
+    {:ok, store, scheduled} = Scheduler.schedule(store, strict: a.auto_scheduling_strict)
+    {store, Scheduler.compact(changes ++ scheduled)}
+  end
+
+  defp auto_schedule(_a, store, changes), do: {store, changes}
 
   defp notify_changes(socket, changes) do
     Enum.each(changes, &notify(socket, Event.from_change(socket.assigns.id, &1)))
