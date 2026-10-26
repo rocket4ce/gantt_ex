@@ -11,49 +11,49 @@ msgstr ""
 "Language: pt_BR\n"
 "Plural-Forms: nplurals=2; plural=(n>1);\n"
 
-#: lib/gantt_ex/i18n.ex:236
+#: lib/gantt_ex/i18n.ex:240
 #, elixir-autogen, elixir-format
 msgid "%{count} day"
 msgid_plural "%{count} days"
 msgstr[0] "%{count} dia"
 msgstr[1] "%{count} dias"
 
-#: lib/gantt_ex/i18n.ex:235
+#: lib/gantt_ex/i18n.ex:239
 #, elixir-autogen, elixir-format
 msgid "%{count} hour"
 msgid_plural "%{count} hours"
 msgstr[0] "%{count} hora"
 msgstr[1] "%{count} horas"
 
-#: lib/gantt_ex/i18n.ex:234
+#: lib/gantt_ex/i18n.ex:238
 #, elixir-autogen, elixir-format
 msgid "%{count} minute"
 msgid_plural "%{count} minutes"
 msgstr[0] "%{count} minuto"
 msgstr[1] "%{count} minutos"
 
-#: lib/gantt_ex/i18n.ex:238
+#: lib/gantt_ex/i18n.ex:242
 #, elixir-autogen, elixir-format
 msgid "%{count} month"
 msgid_plural "%{count} months"
 msgstr[0] "%{count} mês"
 msgstr[1] "%{count} meses"
 
-#: lib/gantt_ex/i18n.ex:239
+#: lib/gantt_ex/i18n.ex:243
 #, elixir-autogen, elixir-format
 msgid "%{count} quarter"
 msgid_plural "%{count} quarters"
 msgstr[0] "%{count} trimestre"
 msgstr[1] "%{count} trimestres"
 
-#: lib/gantt_ex/i18n.ex:237
+#: lib/gantt_ex/i18n.ex:241
 #, elixir-autogen, elixir-format
 msgid "%{count} week"
 msgid_plural "%{count} weeks"
 msgstr[0] "%{count} semana"
 msgstr[1] "%{count} semanas"
 
-#: lib/gantt_ex/i18n.ex:240
+#: lib/gantt_ex/i18n.ex:244
 #, elixir-autogen, elixir-format
 msgid "%{count} year"
 msgid_plural "%{count} years"
@@ -70,12 +70,12 @@ msgstr "Adicionar subtarefa"
 msgid "Add task"
 msgstr "Adicionar tarefa"
 
-#: lib/gantt_ex/i18n.ex:166
+#: lib/gantt_ex/i18n.ex:170
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to delete this dependency?"
 msgstr "Tem certeza de que deseja excluir esta dependência?"
 
-#: lib/gantt_ex/i18n.ex:164
+#: lib/gantt_ex/i18n.ex:168
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to delete this task?"
 msgstr "Tem certeza de que deseja excluir esta tarefa?"
@@ -95,12 +95,12 @@ msgstr "Fechar"
 msgid "Collapse"
 msgstr "Recolher"
 
-#: lib/gantt_ex/i18n.ex:177
+#: lib/gantt_ex/i18n.ex:181
 #, elixir-autogen, elixir-format
 msgid "Collapse all"
 msgstr "Recolher tudo"
 
-#: lib/gantt_ex/i18n.ex:183
+#: lib/gantt_ex/i18n.ex:187
 #, elixir-autogen, elixir-format
 msgid "Days"
 msgstr "Dias"
@@ -150,12 +150,12 @@ msgstr "Data de término"
 msgid "Expand"
 msgstr "Expandir"
 
-#: lib/gantt_ex/i18n.ex:176
+#: lib/gantt_ex/i18n.ex:180
 #, elixir-autogen, elixir-format
 msgid "Expand all"
 msgstr "Expandir tudo"
 
-#: lib/gantt_ex/i18n.ex:179
+#: lib/gantt_ex/i18n.ex:183
 #, elixir-autogen, elixir-format
 msgid "Export"
 msgstr "Exportar"
@@ -170,22 +170,22 @@ msgstr "Término a término"
 msgid "Finish to start"
 msgstr "Término a início"
 
-#: lib/gantt_ex/i18n.ex:178
+#: lib/gantt_ex/i18n.ex:182
 #, elixir-autogen, elixir-format
 msgid "Fullscreen"
 msgstr "Tela cheia"
 
-#: lib/gantt_ex/i18n.ex:195
+#: lib/gantt_ex/i18n.ex:199
 #, elixir-autogen, elixir-format
 msgid "Gantt chart"
 msgstr "Gráfico de Gantt"
 
-#: lib/gantt_ex/i18n.ex:182
+#: lib/gantt_ex/i18n.ex:186
 #, elixir-autogen, elixir-format
 msgid "Hours"
 msgstr "Horas"
 
-#: lib/gantt_ex/i18n.ex:165
+#: lib/gantt_ex/i18n.ex:169
 #, elixir-autogen, elixir-format
 msgid "Its subtasks will be deleted too."
 msgstr "Suas subtarefas também serão excluídas."
@@ -200,7 +200,7 @@ msgstr "Defasagem"
 msgid "Milestone"
 msgstr "Marco"
 
-#: lib/gantt_ex/i18n.ex:185
+#: lib/gantt_ex/i18n.ex:189
 #, elixir-autogen, elixir-format
 msgid "Months"
 msgstr "Meses"
@@ -210,7 +210,7 @@ msgstr "Meses"
 msgid "New task"
 msgstr "Nova tarefa"
 
-#: lib/gantt_ex/i18n.ex:168
+#: lib/gantt_ex/i18n.ex:172
 #, elixir-autogen, elixir-format
 msgid "No"
 msgstr "Não"
@@ -230,7 +230,7 @@ msgstr "Nenhuma (nível principal)"
 msgid "Parent"
 msgstr "Tarefa pai"
 
-#: lib/gantt_ex/i18n.ex:180
+#: lib/gantt_ex/i18n.ex:184
 #, elixir-autogen, elixir-format
 msgid "Print"
 msgstr "Imprimir"
@@ -245,12 +245,12 @@ msgstr "Progresso"
 msgid "Project"
 msgstr "Projeto"
 
-#: lib/gantt_ex/i18n.ex:186
+#: lib/gantt_ex/i18n.ex:190
 #, elixir-autogen, elixir-format
 msgid "Quarters"
 msgstr "Trimestres"
 
-#: lib/gantt_ex/i18n.ex:198
+#: lib/gantt_ex/i18n.ex:202
 #, elixir-autogen, elixir-format
 msgid "Resize"
 msgstr "Redimensionar"
@@ -285,7 +285,7 @@ msgstr "Início a início"
 msgid "Task"
 msgstr "Tarefa"
 
-#: lib/gantt_ex/i18n.ex:196
+#: lib/gantt_ex/i18n.ex:200
 #, elixir-autogen, elixir-format
 msgid "Task list"
 msgstr "Lista de tarefas"
@@ -305,12 +305,12 @@ msgstr "Esta dependência não é permitida"
 msgid "Time period"
 msgstr "Período"
 
-#: lib/gantt_ex/i18n.ex:197
+#: lib/gantt_ex/i18n.ex:201
 #, elixir-autogen, elixir-format
 msgid "Timeline"
 msgstr "Linha do tempo"
 
-#: lib/gantt_ex/i18n.ex:175
+#: lib/gantt_ex/i18n.ex:179
 #, elixir-autogen, elixir-format
 msgid "Today"
 msgstr "Hoje"
@@ -320,350 +320,350 @@ msgstr "Hoje"
 msgid "Type"
 msgstr "Tipo"
 
-#: lib/gantt_ex/i18n.ex:184
+#: lib/gantt_ex/i18n.ex:188
 #, elixir-autogen, elixir-format
 msgid "Weeks"
 msgstr "Semanas"
 
-#: lib/gantt_ex/i18n.ex:187
+#: lib/gantt_ex/i18n.ex:191
 #, elixir-autogen, elixir-format
 msgid "Years"
 msgstr "Anos"
 
-#: lib/gantt_ex/i18n.ex:167
+#: lib/gantt_ex/i18n.ex:171
 #, elixir-autogen, elixir-format
 msgid "Yes"
 msgstr "Sim"
 
-#: lib/gantt_ex/i18n.ex:172
+#: lib/gantt_ex/i18n.ex:176
 #, elixir-autogen, elixir-format
 msgid "Zoom"
 msgstr "Zoom"
 
-#: lib/gantt_ex/i18n.ex:173
+#: lib/gantt_ex/i18n.ex:177
 #, elixir-autogen, elixir-format
 msgid "Zoom in"
 msgstr "Ampliar"
 
-#: lib/gantt_ex/i18n.ex:174
+#: lib/gantt_ex/i18n.ex:178
 #, elixir-autogen, elixir-format
 msgid "Zoom out"
 msgstr "Reduzir"
 
-#: lib/gantt_ex/i18n.ex:189
+#: lib/gantt_ex/i18n.ex:193
 #, elixir-autogen, elixir-format
 msgid "can't be blank"
 msgstr "não pode ficar em branco"
 
-#: lib/gantt_ex/i18n.ex:190
+#: lib/gantt_ex/i18n.ex:194
 #, elixir-autogen, elixir-format
 msgid "is not a valid date"
 msgstr "não é uma data válida"
 
-#: lib/gantt_ex/i18n.ex:191
+#: lib/gantt_ex/i18n.ex:195
 #, elixir-autogen, elixir-format
 msgid "must be a whole number"
 msgstr "deve ser um número inteiro"
 
-#: lib/gantt_ex/i18n.ex:193
+#: lib/gantt_ex/i18n.ex:197
 #, elixir-autogen, elixir-format
 msgid "must be after the start date"
 msgstr "deve ser posterior à data de início"
 
-#: lib/gantt_ex/i18n.ex:192
+#: lib/gantt_ex/i18n.ex:196
 #, elixir-autogen, elixir-format
 msgid "must be between 0 and 100"
 msgstr "deve estar entre 0 e 100"
 
-#: lib/gantt_ex/i18n.ex:261
+#: lib/gantt_ex/i18n.ex:265
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%-d"
 msgstr "%-d"
 
-#: lib/gantt_ex/i18n.ex:264
+#: lib/gantt_ex/i18n.ex:268
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%A, %B %-d"
 msgstr "%A, %-d de %B"
 
-#: lib/gantt_ex/i18n.ex:265
+#: lib/gantt_ex/i18n.ex:269
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%B %Y"
 msgstr "%B %Y"
 
-#: lib/gantt_ex/i18n.ex:260
+#: lib/gantt_ex/i18n.ex:264
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%H:%M"
 msgstr "%H:%M"
 
-#: lib/gantt_ex/i18n.ex:267
+#: lib/gantt_ex/i18n.ex:271
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%Y"
 msgstr "%Y"
 
-#: lib/gantt_ex/i18n.ex:262
+#: lib/gantt_ex/i18n.ex:266
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%a %-d"
 msgstr "%a %-d"
 
-#: lib/gantt_ex/i18n.ex:266
+#: lib/gantt_ex/i18n.ex:270
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%b"
 msgstr "%b"
 
-#: lib/gantt_ex/i18n.ex:263
+#: lib/gantt_ex/i18n.ex:267
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%b %-d"
 msgstr "%-d %b"
 
-#: lib/gantt_ex/i18n.ex:258
+#: lib/gantt_ex/i18n.ex:262
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%m/%d/%Y"
 msgstr "%d/%m/%Y"
 
-#: lib/gantt_ex/i18n.ex:259
+#: lib/gantt_ex/i18n.ex:263
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "%m/%d/%Y %H:%M"
 msgstr "%d/%m/%Y %H:%M"
 
-#: lib/gantt_ex/i18n.ex:268
+#: lib/gantt_ex/i18n.ex:272
 #, elixir-autogen, elixir-format
 msgctxt "date format"
 msgid "Q%q"
 msgstr "T%q"
 
-#: lib/gantt_ex/i18n.ex:294
+#: lib/gantt_ex/i18n.ex:298
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "April"
 msgstr "abril"
 
-#: lib/gantt_ex/i18n.ex:295
+#: lib/gantt_ex/i18n.ex:299
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "August"
 msgstr "agosto"
 
-#: lib/gantt_ex/i18n.ex:297
+#: lib/gantt_ex/i18n.ex:301
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "December"
 msgstr "dezembro"
 
-#: lib/gantt_ex/i18n.ex:293
+#: lib/gantt_ex/i18n.ex:297
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "February"
 msgstr "fevereiro"
 
-#: lib/gantt_ex/i18n.ex:293
+#: lib/gantt_ex/i18n.ex:297
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "January"
 msgstr "janeiro"
 
-#: lib/gantt_ex/i18n.ex:295
+#: lib/gantt_ex/i18n.ex:299
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "July"
 msgstr "julho"
 
-#: lib/gantt_ex/i18n.ex:295
+#: lib/gantt_ex/i18n.ex:299
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "June"
 msgstr "junho"
 
-#: lib/gantt_ex/i18n.ex:294
+#: lib/gantt_ex/i18n.ex:298
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "March"
 msgstr "março"
 
-#: lib/gantt_ex/i18n.ex:294
+#: lib/gantt_ex/i18n.ex:298
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "May"
 msgstr "maio"
 
-#: lib/gantt_ex/i18n.ex:297
+#: lib/gantt_ex/i18n.ex:301
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "November"
 msgstr "novembro"
 
-#: lib/gantt_ex/i18n.ex:296
+#: lib/gantt_ex/i18n.ex:300
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "October"
 msgstr "outubro"
 
-#: lib/gantt_ex/i18n.ex:296
+#: lib/gantt_ex/i18n.ex:300
 #, elixir-autogen, elixir-format
 msgctxt "month"
 msgid "September"
 msgstr "setembro"
 
-#: lib/gantt_ex/i18n.ex:300
+#: lib/gantt_ex/i18n.ex:304
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Apr"
 msgstr "abr"
 
-#: lib/gantt_ex/i18n.ex:302
+#: lib/gantt_ex/i18n.ex:306
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Aug"
 msgstr "ago"
 
-#: lib/gantt_ex/i18n.ex:304
+#: lib/gantt_ex/i18n.ex:308
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Dec"
 msgstr "dez"
 
-#: lib/gantt_ex/i18n.ex:299
+#: lib/gantt_ex/i18n.ex:303
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Feb"
 msgstr "fev"
 
-#: lib/gantt_ex/i18n.ex:299
+#: lib/gantt_ex/i18n.ex:303
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Jan"
 msgstr "jan"
 
-#: lib/gantt_ex/i18n.ex:302
+#: lib/gantt_ex/i18n.ex:306
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Jul"
 msgstr "jul"
 
-#: lib/gantt_ex/i18n.ex:301
+#: lib/gantt_ex/i18n.ex:305
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Jun"
 msgstr "jun"
 
-#: lib/gantt_ex/i18n.ex:300
+#: lib/gantt_ex/i18n.ex:304
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Mar"
 msgstr "mar"
 
-#: lib/gantt_ex/i18n.ex:301
+#: lib/gantt_ex/i18n.ex:305
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "May"
 msgstr "mai"
 
-#: lib/gantt_ex/i18n.ex:304
+#: lib/gantt_ex/i18n.ex:308
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Nov"
 msgstr "nov"
 
-#: lib/gantt_ex/i18n.ex:303
+#: lib/gantt_ex/i18n.ex:307
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Oct"
 msgstr "out"
 
-#: lib/gantt_ex/i18n.ex:303
+#: lib/gantt_ex/i18n.ex:307
 #, elixir-autogen, elixir-format
 msgctxt "month short"
 msgid "Sep"
 msgstr "set"
 
-#: lib/gantt_ex/i18n.ex:308
+#: lib/gantt_ex/i18n.ex:312
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Friday"
 msgstr "sexta-feira"
 
-#: lib/gantt_ex/i18n.ex:306
+#: lib/gantt_ex/i18n.ex:310
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Monday"
 msgstr "segunda-feira"
 
-#: lib/gantt_ex/i18n.ex:308
+#: lib/gantt_ex/i18n.ex:312
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Saturday"
 msgstr "sábado"
 
-#: lib/gantt_ex/i18n.ex:309
+#: lib/gantt_ex/i18n.ex:313
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Sunday"
 msgstr "domingo"
 
-#: lib/gantt_ex/i18n.ex:307
+#: lib/gantt_ex/i18n.ex:311
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Thursday"
 msgstr "quinta-feira"
 
-#: lib/gantt_ex/i18n.ex:306
+#: lib/gantt_ex/i18n.ex:310
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Tuesday"
 msgstr "terça-feira"
 
-#: lib/gantt_ex/i18n.ex:307
+#: lib/gantt_ex/i18n.ex:311
 #, elixir-autogen, elixir-format
 msgctxt "weekday"
 msgid "Wednesday"
 msgstr "quarta-feira"
 
-#: lib/gantt_ex/i18n.ex:313
+#: lib/gantt_ex/i18n.ex:317
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Fri"
 msgstr "sex"
 
-#: lib/gantt_ex/i18n.ex:311
+#: lib/gantt_ex/i18n.ex:315
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Mon"
 msgstr "seg"
 
-#: lib/gantt_ex/i18n.ex:313
+#: lib/gantt_ex/i18n.ex:317
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Sat"
 msgstr "sáb"
 
-#: lib/gantt_ex/i18n.ex:314
+#: lib/gantt_ex/i18n.ex:318
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Sun"
 msgstr "dom"
 
-#: lib/gantt_ex/i18n.ex:312
+#: lib/gantt_ex/i18n.ex:316
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Thu"
 msgstr "qui"
 
-#: lib/gantt_ex/i18n.ex:311
+#: lib/gantt_ex/i18n.ex:315
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Tue"
 msgstr "ter"
 
-#: lib/gantt_ex/i18n.ex:312
+#: lib/gantt_ex/i18n.ex:316
 #, elixir-autogen, elixir-format
 msgctxt "weekday short"
 msgid "Wed"
@@ -674,75 +674,90 @@ msgstr "qua"
 msgid "WBS"
 msgstr "EAP"
 
-#: lib/gantt_ex/i18n.ex:171
+#: lib/gantt_ex/i18n.ex:175
 #, elixir-autogen, elixir-format
 msgid "Redo"
 msgstr "Refazer"
 
-#: lib/gantt_ex/i18n.ex:170
+#: lib/gantt_ex/i18n.ex:174
 #, elixir-autogen, elixir-format
 msgid "Undo"
 msgstr "Desfazer"
 
-#: lib/gantt_ex/i18n.ex:226
+#: lib/gantt_ex/i18n.ex:230
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to delete %{count} task?"
 msgid_plural "Are you sure you want to delete these %{count} tasks?"
 msgstr[0] "Tem certeza de que deseja excluir %{count} tarefa?"
 msgstr[1] "Tem certeza de que deseja excluir estas %{count} tarefas?"
 
-#: lib/gantt_ex/i18n.ex:156
+#: lib/gantt_ex/i18n.ex:160
 #, elixir-autogen, elixir-format
 msgid "As late as possible"
 msgstr "O mais tarde possível"
 
-#: lib/gantt_ex/i18n.ex:155
+#: lib/gantt_ex/i18n.ex:159
 #, elixir-autogen, elixir-format
 msgid "As soon as possible"
 msgstr "O mais breve possível"
 
-#: lib/gantt_ex/i18n.ex:152
+#: lib/gantt_ex/i18n.ex:156
 #, elixir-autogen, elixir-format
 msgid "Constraint"
 msgstr "Restrição"
 
-#: lib/gantt_ex/i18n.ex:154
+#: lib/gantt_ex/i18n.ex:158
 #, elixir-autogen, elixir-format
 msgid "Constraint date"
 msgstr "Data da restrição"
 
-#: lib/gantt_ex/i18n.ex:153
+#: lib/gantt_ex/i18n.ex:157
 #, elixir-autogen, elixir-format
 msgid "Constraint type"
 msgstr "Tipo de restrição"
 
-#: lib/gantt_ex/i18n.ex:159
+#: lib/gantt_ex/i18n.ex:163
 #, elixir-autogen, elixir-format
 msgid "Finish no earlier than"
 msgstr "Não terminar antes de"
 
-#: lib/gantt_ex/i18n.ex:160
+#: lib/gantt_ex/i18n.ex:164
 #, elixir-autogen, elixir-format
 msgid "Finish no later than"
 msgstr "Não terminar depois de"
 
-#: lib/gantt_ex/i18n.ex:162
+#: lib/gantt_ex/i18n.ex:166
 #, elixir-autogen, elixir-format
 msgid "Must finish on"
 msgstr "Deve terminar em"
 
-#: lib/gantt_ex/i18n.ex:161
+#: lib/gantt_ex/i18n.ex:165
 #, elixir-autogen, elixir-format
 msgid "Must start on"
 msgstr "Deve iniciar em"
 
-#: lib/gantt_ex/i18n.ex:157
+#: lib/gantt_ex/i18n.ex:161
 #, elixir-autogen, elixir-format
 msgid "Start no earlier than"
 msgstr "Não iniciar antes de"
 
-#: lib/gantt_ex/i18n.ex:158
+#: lib/gantt_ex/i18n.ex:162
 #, elixir-autogen, elixir-format
 msgid "Start no later than"
-
 msgstr "Não iniciar depois de"
+
+#: lib/gantt_ex/i18n.ex:152
+#, elixir-autogen, elixir-format
+msgid "Critical path"
+msgstr "Caminho crítico"
+
+#: lib/gantt_ex/i18n.ex:154
+#, elixir-autogen, elixir-format
+msgid "Free slack"
+msgstr "Folga livre"
+
+#: lib/gantt_ex/i18n.ex:153
+#, elixir-autogen, elixir-format
+msgid "Total slack"
+
+msgstr "Folga total"

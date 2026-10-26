@@ -37,6 +37,7 @@ defmodule GanttEx.Live.Components do
   attr :show_history, :boolean, default: false
   attr :can_undo, :boolean, default: false
   attr :can_redo, :boolean, default: false
+  attr :show_critical, :boolean, default: false
   slot :inner_block
 
   def toolbar(assigns) do
@@ -151,6 +152,18 @@ defmodule GanttEx.Live.Components do
           <.icon name={:zoom_in} />
         </button>
       </div>
+
+      <button
+        id={"#{@ctx.id}-critical-path"}
+        type="button"
+        class={["gx-btn", @show_critical && "gx-btn--active"]}
+        aria-pressed={to_string(@show_critical)}
+        phx-click="toggle_critical"
+        phx-target={@ctx.myself}
+      >
+        <.icon name={:bolt} />
+        <span>{@ctx.labels.critical_path}</span>
+      </button>
 
       <button
         id={"#{@ctx.id}-today"}
@@ -396,6 +409,17 @@ defmodule GanttEx.Live.Components do
     """
   end
 
+  defp cell_content(%{column: %{field: field, inner_block: nil}} = assigns)
+       when field in [:total_slack, :free_slack] do
+    assigns = assign(assigns, :slack, assigns.row[:slack] && Map.fetch!(assigns.row.slack, field))
+
+    ~H"""
+    <span class={["gx-truncate", @slack == 0 && "gx-critical-text"]}>
+      {if @slack, do: GanttEx.I18n.duration(@slack, @ctx.unit, @ctx.locale)}
+    </span>
+    """
+  end
+
   defp cell_content(%{column: %{field: :wbs, inner_block: nil}} = assigns) do
     ~H"""
     <span class="gx-truncate gx-wbs">{@row.wbs}</span>
@@ -437,6 +461,9 @@ defmodule GanttEx.Live.Components do
 
       :constraint_type ->
         if(task.constraint_type, do: Map.fetch!(ctx.labels, task.constraint_type), else: "")
+
+      field when field in [:total_slack, :free_slack] ->
+        ""
 
       field ->
         task.meta |> meta_value(field) |> to_string()
@@ -566,6 +593,7 @@ defmodule GanttEx.Live.Components do
         "gx-bar--#{@bar.kind}",
         @bar.selected && "gx-bar--selected",
         @bar.drag == "none" && "gx-bar--locked",
+        @bar[:critical] && "gx-bar--critical",
         @bar.class
       ]}
       style={bar_style(@bar)}
@@ -593,6 +621,7 @@ defmodule GanttEx.Live.Components do
         <span class="gx-handle gx-handle--start" data-gx-handle="start"></span>
         <span class="gx-handle gx-handle--end" data-gx-handle="end"></span>
       <% end %>
+      <span :if={@bar[:slack_width]} class="gx-slack" style={"width: #{px(@bar.slack_width)}"}></span>
       <span :if={@bar.progress_editable} class="gx-progress-handle" data-gx-progress-handle></span>
       <span
         :if={@bar[:constraint_x]}
@@ -671,7 +700,11 @@ defmodule GanttEx.Live.Components do
       <g
         :for={link <- @links}
         :key={link.key}
-        class={["gx-link", link.selected && "gx-link--selected"]}
+        class={[
+          "gx-link",
+          link.selected && "gx-link--selected",
+          link[:critical] && "gx-link--critical"
+        ]}
         style={link.link.color && "--gx-link-color: #{link.link.color}"}
         data-gx-link={link.key}
         phx-click={not @ctx.readonly && "select_link"}

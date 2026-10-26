@@ -59,6 +59,10 @@ defmodule GanttEx.Live.Gantt do
       constraint section. Defaults to `false`.
     * `:auto_scheduling_strict` - also move tasks earlier, to their earliest
       possible date. Defaults to `false`.
+    * `:critical_path` - highlight the critical path (see `GanttEx.CriticalPath`).
+      The toolbar has a toggle for it. Defaults to `false`.
+    * `:show_slack` - draw the free slack of each task after its bar.
+      Defaults to `false`.
     * `:undo` - undo and redo with the toolbar or Ctrl/Cmd+Z and
       Ctrl/Cmd+Shift+Z (Ctrl+Y). Undone changes are reported as events too.
       Defaults to `true`.
@@ -157,7 +161,7 @@ defmodule GanttEx.Live.Gantt do
     TaskForm
   }
 
-  alias GanttEx.{Marker, Scheduler, Timeline, Zoom}
+  alias GanttEx.{CriticalPath, Marker, Scheduler, Timeline, Zoom}
   alias GanttEx.Live.{Columns, Interaction}
 
   @hook "GanttEx.Live.Hook.Gantt"
@@ -197,6 +201,8 @@ defmodule GanttEx.Live.Gantt do
     undo: true,
     auto_scheduling: false,
     auto_scheduling_strict: false,
+    critical_path: false,
+    show_slack: false,
     export_filename: "gantt",
     theme: "auto",
     class: nil,
@@ -262,7 +268,9 @@ defmodule GanttEx.Live.Gantt do
        labels_locale: nil,
        timeline: nil,
        viewport: %{top: 0, height: 900},
-       history: History.new()
+       history: History.new(),
+       show_critical: nil,
+       analysis: nil
      )}
   end
 
@@ -418,12 +426,15 @@ defmodule GanttEx.Live.Gantt do
     bar_height = a.bar_height || a.row_height - 12
 
     selection = normalize_selection(a)
-    a = Map.put(a, :selection, selection)
+    show_critical = if is_nil(a.show_critical), do: a.critical_path, else: a.show_critical
+    analysis = analysis(a, show_critical)
+    a = Map.merge(a, %{selection: selection, analysis: analysis, show_critical: show_critical})
 
     rows =
       a.store
       |> Store.rows(collapsed: a.collapsed, filter: a.filter, sort: a.sort)
       |> Enum.map(&Map.put(&1, :selected, MapSet.member?(selection, &1.key)))
+      |> Enum.map(&Map.put(&1, :slack, analysis && analysis.tasks[&1.task.id]))
 
     timeline = build_timeline(a, level, today)
 
@@ -450,10 +461,20 @@ defmodule GanttEx.Live.Gantt do
     socket
     |> assign(
       selection: selection,
+      show_critical: show_critical,
+      analysis: analysis,
+      analysis_cache: analysis && {a.store, analysis},
       level: level,
       rows: rows,
       bars: bars,
-      link_paths: Enum.map(layout.links, &Map.put(&1, :selected, &1.key == a.selected_link)),
+      link_paths:
+        Enum.map(layout.links, fn link ->
+          Map.merge(link, %{
+            selected: link.key == a.selected_link,
+            critical:
+              show_critical and analysis != nil and MapSet.member?(analysis.links, link.link.id)
+          })
+        end),
       columns: columns,
       grid_width_value: grid_width,
       chart_width: layout.width,
@@ -520,6 +541,21 @@ defmodule GanttEx.Live.Gantt do
   defp smart_rendering?(:auto, count), do: count > @auto_threshold
   defp smart_rendering?(enabled, count), do: enabled == true and count > 0
 
+  # CPM runs when something shows it, and only again when the store changes.
+  defp analysis(a, show_critical) do
+    needed =
+      show_critical or a.show_slack or
+        Enum.any?(a.column, &(Map.get(&1, :field) in [:total_slack, :free_slack]))
+
+    cached = a[:analysis_cache]
+
+    cond do
+      not needed -> nil
+      cached && elem(cached, 0) == a.store -> elem(cached, 1)
+      true -> CriticalPath.analyze(a.store)
+    end
+  end
+
   # The selection always contains the primary selected task, when any.
   defp normalize_selection(%{selected: nil}), do: MapSet.new()
 
@@ -566,9 +602,26 @@ defmodule GanttEx.Live.Gantt do
       progress_editable: editable and task.type != :milestone,
       linkable: not a.readonly and a.links_editable,
       class: a.task_class && a.task_class.(task),
-      constraint_x: constraint_x(task, bar, a)
+      constraint_x: constraint_x(task, bar, a),
+      critical:
+        a.show_critical and a.analysis != nil and
+          match?(%{critical: true}, a.analysis.tasks[task.id]),
+      slack_width: slack_width(task, a)
     })
   end
+
+  defp slack_width(task, %{show_slack: true, analysis: %{tasks: tasks}} = a) do
+    case tasks[task.id] do
+      %{free_slack: slack} when slack > 0 ->
+        finish = Store.add_duration(a.store, task, task.end_date, slack)
+        Timeline.x(a.timeline, finish) - Timeline.x(a.timeline, task.end_date)
+
+      _ ->
+        nil
+    end
+  end
+
+  defp slack_width(_task, _a), do: nil
 
   # Position of the constraint date relative to the bar, to draw a tick.
   defp constraint_x(
@@ -709,6 +762,7 @@ defmodule GanttEx.Live.Gantt do
         can_undo={@undo and not @readonly and History.can_undo?(@history)}
         can_redo={@undo and not @readonly and History.can_redo?(@history)}
         show_history={@undo and not @readonly}
+        show_critical={@show_critical}
       >
         {render_slot(@toolbar_actions)}
       </.toolbar>
@@ -903,6 +957,10 @@ defmodule GanttEx.Live.Gantt do
     else
       {:noreply, handle_key(key, socket)}
     end
+  end
+
+  def handle_event("toggle_critical", _params, socket) do
+    {:noreply, socket |> assign(show_critical: not socket.assigns.show_critical) |> prepare()}
   end
 
   def handle_event("undo", _params, socket), do: {:noreply, history_step(socket, :undo)}

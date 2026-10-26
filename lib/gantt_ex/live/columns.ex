@@ -78,7 +78,8 @@ defmodule GanttEx.Live.Columns do
           align: Map.get(slot, :align) || align(field),
           tree: Map.get(slot, :tree, false),
           editor: Map.get(slot, :editor, editor(field)),
-          sortable: Map.get(slot, :sortable, field not in [:add, :wbs]),
+          sortable:
+            Map.get(slot, :sortable, field not in [:add, :wbs, :total_slack, :free_slack]),
           inner_block: Map.get(slot, :inner_block)
         })
       end)
@@ -107,6 +108,8 @@ defmodule GanttEx.Live.Columns do
   defp label(:type, labels), do: labels.type
   defp label(:wbs, labels), do: labels.wbs
   defp label(:constraint_type, labels), do: labels.constraint
+  defp label(:total_slack, labels), do: labels.total_slack
+  defp label(:free_slack, labels), do: labels.free_slack
   defp label(:add, _labels), do: ""
 
   defp label(field, _labels),
@@ -117,6 +120,7 @@ defmodule GanttEx.Live.Columns do
   defp width(:wbs), do: 64
   defp width(:constraint_type), do: 150
   defp width(field) when field in [:duration, :progress], do: 76
+  defp width(field) when field in [:total_slack, :free_slack], do: 96
   defp width(_field), do: 104
 
   defp align(field) when field in [:start_date, :end_date, :duration, :progress, :add],

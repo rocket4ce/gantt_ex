@@ -148,6 +148,10 @@ defmodule GanttEx.I18n do
         finish_to_finish: gettext("Finish to finish"),
         start_to_finish: gettext("Start to finish"),
         link_rejected: gettext("This dependency is not allowed"),
+        # critical path
+        critical_path: gettext("Critical path"),
+        total_slack: gettext("Total slack"),
+        free_slack: gettext("Free slack"),
         # constraints
         constraint: gettext("Constraint"),
         constraint_type: gettext("Constraint type"),

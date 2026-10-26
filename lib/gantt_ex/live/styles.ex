@@ -1041,6 +1041,49 @@ defmodule GanttEx.Live.Styles do
         opacity: 1;
       }
 
+      .gx-btn--active {
+        color: var(--gx-accent-strong);
+        background: var(--gx-accent-soft);
+      }
+
+      .gx-bar--critical .gx-bar-body {
+        background: var(--gx-bar-bg, var(--gx-critical, #e11d48));
+      }
+
+      .gx-bar--critical .gx-bar-progress {
+        background: var(--gx-bar-progress, var(--gx-critical-progress, #9f1239));
+      }
+
+      .gx-bar--milestone.gx-bar--critical .gx-bar-body::before {
+        background: var(--gx-critical, #e11d48);
+        border-color: var(--gx-critical-progress, #9f1239);
+      }
+
+      .gx-link--critical {
+        color: var(--gx-critical, #e11d48);
+      }
+
+      .gx-link--critical .gx-link-line {
+        stroke-width: 2;
+      }
+
+      .gx-critical-text {
+        font-weight: 600;
+        color: var(--gx-critical, #e11d48);
+      }
+
+      .gx-slack {
+        position: absolute;
+        top: 50%;
+        left: 100%;
+        height: 4px;
+        margin-top: -2px;
+        background: repeating-linear-gradient(90deg, var(--gx-muted) 0 4px, transparent 4px 7px);
+        border-radius: 2px;
+        opacity: 0.55;
+        pointer-events: none;
+      }
+
       .gx-constraint {
         position: absolute;
         top: -5px;
