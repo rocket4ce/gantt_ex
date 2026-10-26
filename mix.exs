@@ -2,6 +2,7 @@ defmodule GanttEx.MixProject do
   use Mix.Project
 
   @version "0.1.0"
+  @source_url "https://github.com/rocket4ce/gantt_ex"
 
   def project do
     [
@@ -18,7 +19,9 @@ defmodule GanttEx.MixProject do
         "Interactive Gantt charts for Phoenix LiveView: tasks, dependencies, " <>
           "drag & drop scheduling, zoomable scales and i18n, with minimal JavaScript.",
       package: package(),
-      docs: docs()
+      docs: docs(),
+      source_url: @source_url,
+      homepage_url: @source_url
     ]
   end
 
@@ -53,6 +56,10 @@ defmodule GanttEx.MixProject do
   defp package do
     [
       licenses: ["MIT"],
+      links: %{
+        "GitHub" => @source_url,
+        "Changelog" => "https://hexdocs.pm/gantt_ex/changelog.html"
+      },
       files: ~w(lib priv guides mix.exs README.md CHANGELOG.md LICENSE .formatter.exs)
     ]
   end
