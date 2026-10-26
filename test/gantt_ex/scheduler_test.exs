@@ -127,7 +127,9 @@ defmodule GanttEx.SchedulerTest do
     s =
       store(
         [%{(tasks |> hd()) | start_date: ~D[2025-01-09]}, Enum.at(tasks, 1)],
-        [%{id: 1, source: 1, target: 2}], work_time: true)
+        [%{id: 1, source: 1, target: 2}],
+        work_time: true
+      )
       |> schedule()
 
     # Thu 9 + 2 -> ends Sat 11 00:00 (after Friday) -> B starts Monday

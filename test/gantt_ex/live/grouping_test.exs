@@ -56,6 +56,12 @@ defmodule GanttEx.Live.GroupingTest do
     assert has_element?(view, "[data-gx-row='3'].gx-row--selected")
   end
 
+  test "false disables grouping", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn, group_by: false)
+    refute has_element?(view, ".gx-row--group")
+    assert has_element?(view, "#gantt[data-gx-reorder=true]")
+  end
+
   test "tasks in groups are still editable", %{conn: conn} do
     {:ok, view, _html} = mount_gantt(conn, group_by: :owner)
 

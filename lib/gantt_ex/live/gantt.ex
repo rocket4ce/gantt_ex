@@ -596,7 +596,7 @@ defmodule GanttEx.Live.Gantt do
   defp smart_rendering?(:auto, count), do: count > @auto_threshold
   defp smart_rendering?(enabled, count), do: enabled == true and count > 0
 
-  defp group_spec(%{group_by: nil}), do: nil
+  defp group_spec(%{group_by: group_by}) when group_by in [nil, false], do: nil
 
   defp group_spec(a) do
     resources = a.ctx_resources
@@ -859,7 +859,8 @@ defmodule GanttEx.Live.Gantt do
       data-gx-drag-create={to_string(@drag_create and not @readonly)}
       data-gx-reorder={
         to_string(
-          @reorder and not @readonly and is_nil(@sort) and is_nil(@filter) and is_nil(@group_by)
+          @reorder and not @readonly and is_nil(@sort) and is_nil(@filter) and
+            @group_by in [nil, false]
         )
       }
       data-gx-window={@window}
