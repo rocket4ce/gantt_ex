@@ -709,12 +709,17 @@ defmodule GanttEx.Live.Gantt do
   # Deadlines are inclusive days: a task due on the 10th may end on the 10th.
   defp deadline(%Task{deadline: %NaiveDateTime{} = date} = task, bar, a) do
     due = TaskForm.parse_end(date, a.duration_unit)
+    x = Timeline.x(a.timeline, due)
+    # the end of the bar, joined to the flag so the deadline reads as part of the task
+    finish = bar.x + bar.width
 
     %{
-      x: Timeline.x(a.timeline, due),
+      x: x,
       y: bar.y,
       height: bar.height,
-      overdue: NaiveDateTime.compare(task.end_date, due) == :gt
+      date: date,
+      overdue: NaiveDateTime.compare(task.end_date, due) == :gt,
+      gap: %{x: min(x, finish), width: abs(x - finish)}
     }
   end
 

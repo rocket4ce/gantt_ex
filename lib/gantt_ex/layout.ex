@@ -44,7 +44,7 @@ defmodule GanttEx.Layout do
           width: float(),
           height: number(),
           progress: float(),
-          baseline: %{x: float(), y: float(), width: float()} | nil,
+          baseline: %{x: float(), y: float(), width: float(), milestone: boolean()} | nil,
           uid: String.t(),
           segment: boolean()
         }
@@ -211,7 +211,12 @@ defmodule GanttEx.Layout do
          y
        ) do
     x = Timeline.x(timeline, start)
-    %{x: x, y: y, width: max(Timeline.x(timeline, finish) - x, 2)}
+    width = Timeline.x(timeline, finish) - x
+
+    # a zero-length baseline (a milestone) is drawn as a small diamond
+    if width < 1,
+      do: %{x: x, y: y, width: 0, milestone: true},
+      else: %{x: x, y: y, width: width, milestone: false}
   end
 
   defp baseline(_task, _timeline, _y), do: nil

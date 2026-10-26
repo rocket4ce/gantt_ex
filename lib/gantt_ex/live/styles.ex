@@ -922,6 +922,12 @@ defmodule GanttEx.Live.Styles do
         transition: box-shadow 0.18s var(--gx-ease), filter 0.18s;
       }
 
+      /* each bar is a stacking context: lift the hovered one so its tooltip
+         is painted above the bars of the following rows */
+      .gx-bar:hover {
+        z-index: 6;
+      }
+
       .gx-bar:hover .gx-bar-body {
         filter: brightness(1.05) saturate(1.05);
         box-shadow: 0 6px 16px -6px rgba(15, 23, 42, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
@@ -1280,6 +1286,35 @@ defmodule GanttEx.Live.Styles do
 
       .gx-deadline--overdue {
         --gx-deadline: var(--gx-danger);
+      }
+
+      .gx-deadline-gap {
+        position: absolute;
+        height: 0;
+        margin-top: -1px;
+        border-top: 2px dotted var(--gx-deadline, #f59e0b);
+        opacity: 0.7;
+      }
+
+      .gx-deadline-gap--overdue {
+        --gx-deadline: var(--gx-danger);
+        border-top-style: dashed;
+        opacity: 0.85;
+      }
+
+      /* the gap is computed from the dates on the server: hide it while dragging */
+      .gx-root--dragging .gx-deadline-gap {
+        opacity: 0;
+      }
+
+      .gx-baseline--milestone {
+        width: 8px;
+        height: 8px;
+        margin-left: -4px;
+        background: transparent;
+        border: 2px solid var(--gx-baseline, #94a3b8);
+        border-radius: 1px;
+        transform: rotate(45deg);
       }
 
       .gx-bar--overdue .gx-bar-body {

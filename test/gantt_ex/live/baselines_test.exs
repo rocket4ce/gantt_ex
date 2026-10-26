@@ -30,8 +30,34 @@ defmodule GanttEx.Live.BaselinesTest do
     # Design ends on Jan 9 but is due on Jan 7
     assert has_element?(view, "#gantt-bar-2.gx-bar--overdue")
     assert has_element?(view, ".gx-deadline.gx-deadline--overdue[style*='left: 336px']")
+    # the flag is joined to the end of the bar (Jan 9 = 384px): overdue by one day
+    assert has_element?(
+             view,
+             ".gx-deadline-gap--overdue[style*='left: 336px'][style*='width: 48px']"
+           )
+
+    # on time: the gap goes from the end of Build (Jan 14 = 624px) to Jan 21 (960px)
+    assert has_element?(
+             view,
+             ".gx-deadline-gap:not(.gx-deadline-gap--overdue)[style*='left: 624px'][style*='width: 336px']"
+           )
+
     refute has_element?(view, "#gantt-bar-3.gx-bar--overdue")
     assert has_element?(view, "#gantt-bar-2 .gx-tooltip", "Deadline")
+  end
+
+  test "milestone baselines are drawn as diamonds", %{conn: conn} do
+    tasks =
+      List.update_at(
+        sample_tasks(),
+        3,
+        &Map.merge(&1, %{planned_start: ~D[2025-01-15], planned_end: ~D[2025-01-15]})
+      )
+
+    {:ok, view, _html} = mount_gantt(conn, tasks: tasks, baselines: true)
+
+    assert has_element?(view, ".gx-baseline--milestone[style*='left: 672px']")
+    refute has_element?(view, ".gx-baseline--milestone[style*='width']")
   end
 
   test "the lightbox edits baselines and deadlines", %{conn: conn} do

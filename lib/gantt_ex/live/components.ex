@@ -822,17 +822,27 @@ defmodule GanttEx.Live.Components do
       <%= for bar <- @bars do %>
         <div
           :if={bar.baseline}
-          class="gx-baseline"
-          style={"left: #{px(bar.baseline.x)}; top: #{px(bar.baseline.y)}; width: #{px(bar.baseline.width)}"}
+          class={["gx-baseline", bar.baseline[:milestone] && "gx-baseline--milestone"]}
+          style={
+            "left: #{px(bar.baseline.x)}; top: #{px(bar.baseline.y)}" <>
+              if(bar.baseline[:milestone], do: "", else: "; width: #{px(bar.baseline.width)}")
+          }
         >
         </div>
-        <div
-          :if={bar[:deadline]}
-          class={["gx-deadline", bar.deadline.overdue && "gx-deadline--overdue"]}
-          style={"left: #{px(bar.deadline.x)}; top: #{px(bar.deadline.y)}; height: #{px(bar.deadline.height)}"}
-          title={@ctx.labels.deadline}
-        >
-        </div>
+        <%= if bar[:deadline] do %>
+          <div
+            :if={bar.deadline.gap.width > 0}
+            class={["gx-deadline-gap", bar.deadline.overdue && "gx-deadline-gap--overdue"]}
+            style={"left: #{px(bar.deadline.gap.x)}; top: #{px(bar.deadline.y + bar.deadline.height / 2)}; width: #{px(bar.deadline.gap.width)}"}
+          >
+          </div>
+          <div
+            class={["gx-deadline", bar.deadline.overdue && "gx-deadline--overdue"]}
+            style={"left: #{px(bar.deadline.x)}; top: #{px(bar.deadline.y)}; height: #{px(bar.deadline.height)}"}
+            title={"#{@ctx.labels.deadline}: #{bar.task.text} · #{@ctx.format.(bar.deadline.date, @ctx.date_pattern)}"}
+          >
+          </div>
+        <% end %>
       <% end %>
     </div>
     """
