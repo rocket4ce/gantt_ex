@@ -321,11 +321,12 @@ defmodule GanttEx.Live.Components do
   def grid_row(assigns) do
     ~H"""
     <div
-      id={"#{@ctx.id}-row-#{dom_key(@row.key)}"}
+      id={"#{@ctx.id}-row-#{dom_key(@row[:uid] || @row.key)}"}
       class={[
         "gx-row",
         @row.selected && "gx-row--selected",
-        @row.task.type == :project && "gx-row--project"
+        @row.task.type == :project && "gx-row--project",
+        @row[:group] && "gx-row--group"
       ]}
       role="row"
       aria-level={@row.level + 1}
@@ -381,14 +382,15 @@ defmodule GanttEx.Live.Components do
       <.icon name={:chevron_right} />
     </button>
     <span :if={not @row.has_children} class="gx-toggle-spacer"></span>
-    <span class={["gx-type-dot", "gx-type-dot--#{@row.task.type}"]}></span>
+    <span :if={not @row[:group]} class={["gx-type-dot", "gx-type-dot--#{@row.task.type}"]}></span>
     <span class="gx-truncate">
-      <%= if @column.inner_block do %>
+      <%= if @column.inner_block && not @row[:group] do %>
         {render_slot(@column, @row.task)}
       <% else %>
         {cell_value(@row.task, @column, @ctx)}
       <% end %>
     </span>
+    <span :if={@row[:group]} class="gx-count">{@row.count}</span>
     """
   end
 
@@ -429,7 +431,7 @@ defmodule GanttEx.Live.Components do
   defp cell_content(assigns) do
     ~H"""
     <span class="gx-truncate">
-      <%= if @column.inner_block do %>
+      <%= if @column.inner_block && not @row[:group] do %>
         {render_slot(@column, @row.task)}
       <% else %>
         {cell_value(@row.task, @column, @ctx)}
@@ -696,7 +698,7 @@ defmodule GanttEx.Live.Components do
 
     [
       "--gx-x: #{px(bar.x)}; --gx-y: #{px(bar.y)}; --gx-w: #{px(bar.width)}; ",
-      "--gx-p: #{Float.round(bar.progress * 100, 2)}%",
+      "--gx-p: #{decimal(bar.progress * 100)}%",
       task.color && "; --gx-bar-bg: #{task.color}",
       task.progress_color && "; --gx-bar-progress: #{task.progress_color}",
       task.text_color && "; --gx-bar-text: #{task.text_color}"
@@ -788,7 +790,7 @@ defmodule GanttEx.Live.Components do
   defp format_load(value) do
     if value == Float.round(value),
       do: value |> trunc() |> Integer.to_string(),
-      else: Float.to_string(Float.round(value, 1))
+      else: decimal(Float.round(value, 1))
   end
 
   @doc "Renders the tasks rolled up on the rows of their ancestor projects."
@@ -1335,12 +1337,24 @@ defmodule GanttEx.Live.Components do
 
       iex> GanttEx.Live.Components.px(40)
       "40px"
+
+      iex> GanttEx.Live.Components.px(1200.0)
+      "1200px"
   """
   @spec px(number()) :: String.t()
   def px(value) when is_integer(value), do: "#{value}px"
 
-  def px(value) when is_float(value),
-    do: "#{Float.round(value, 2)}px" |> String.replace(".0px", "px")
+  def px(value) when is_float(value), do: decimal(value) <> "px"
+
+  @doc false
+  # Plain decimal notation (Float.to_string/1 may use exponents: "1.2e3").
+  def decimal(value) when is_integer(value), do: Integer.to_string(value)
+
+  def decimal(value) when is_float(value) do
+    value
+    |> :erlang.float_to_binary([:compact, decimals: 2])
+    |> String.replace_suffix(".0", "")
+  end
 
   @doc """
   Turns a key into a string usable in DOM ids.

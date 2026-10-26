@@ -66,6 +66,10 @@ defmodule GanttEx.Live.Gantt do
     * `:resources` - the resources tasks are assigned to (see `GanttEx.Resource`).
       Tasks list their assignments in `:resources`; the lightbox gets a
       `:resources` section and grids can show a `:resources` column.
+    * `:group_by` - group the tasks under virtual rows: a task field (`:type`),
+      a `:meta` key (`:owner`), `:resources` (a task appears under each of its
+      resources) or a function returning the group(s) of a task.
+    * `:group_label` - a function returning the label of a group.
     * `:resource_panel` - show the load of every resource below the chart
       (see `GanttEx.ResourceLoad`). Defaults to `false`.
     * `:baselines` - draw the baseline (`:planned_start` / `:planned_end`)
@@ -214,6 +218,8 @@ defmodule GanttEx.Live.Gantt do
     baselines: false,
     resources: [],
     resource_panel: false,
+    group_by: nil,
+    group_label: nil,
     export_filename: "gantt",
     theme: "auto",
     class: nil,
@@ -436,6 +442,13 @@ defmodule GanttEx.Live.Gantt do
     today = today(a)
     bar_height = a.bar_height || a.row_height - 12
 
+    ctx_resources =
+      Map.new(a.resources, fn r ->
+        r = Resource.new!(r)
+        {Store.key(r.id), r}
+      end)
+
+    a = Map.put(a, :ctx_resources, ctx_resources)
     selection = normalize_selection(a)
     show_critical = if is_nil(a.show_critical), do: a.critical_path, else: a.show_critical
     analysis = analysis(a, show_critical)
@@ -443,7 +456,12 @@ defmodule GanttEx.Live.Gantt do
 
     rows =
       a.store
-      |> Store.rows(collapsed: a.collapsed, filter: a.filter, sort: a.sort)
+      |> Store.rows(
+        collapsed: a.collapsed,
+        filter: a.filter,
+        sort: a.sort,
+        group_by: group_spec(a)
+      )
       |> Enum.map(&Map.put(&1, :selected, MapSet.member?(selection, &1.key)))
       |> Enum.map(&Map.put(&1, :slack, analysis && analysis.tasks[&1.task.id]))
 
@@ -517,11 +535,7 @@ defmodule GanttEx.Live.Gantt do
         inline_edit: a.inline_edit,
         tooltips: a.tooltips,
         lightbox: a.lightbox,
-        resources:
-          Map.new(a.resources, fn r ->
-            r = Resource.new!(r)
-            {Store.key(r.id), r}
-          end)
+        resources: a.ctx_resources
       }
     )
     |> apply_window()
@@ -567,6 +581,46 @@ defmodule GanttEx.Live.Gantt do
 
   defp smart_rendering?(:auto, count), do: count > @auto_threshold
   defp smart_rendering?(enabled, count), do: enabled == true and count > 0
+
+  defp group_spec(%{group_by: nil}), do: nil
+
+  defp group_spec(a) do
+    resources = a.ctx_resources
+
+    group =
+      case a.group_by do
+        fun when is_function(fun, 1) ->
+          fun
+
+        :resources ->
+          fn task ->
+            task.resources |> Enum.map(& &1.id) |> then(&if(&1 == [], do: nil, else: &1))
+          end
+
+        field ->
+          fn task ->
+            if Map.has_key?(task, field), do: Map.get(task, field), else: task.meta[field]
+          end
+      end
+
+    label =
+      a.group_label ||
+        fn
+          nil -> a.labels.unassigned
+          value when a.group_by == :resources -> resource_text(resources, value)
+          value when is_atom(value) -> Map.get(a.labels, value) || to_string(value)
+          value -> to_string(value)
+        end
+
+    {group, label}
+  end
+
+  defp resource_text(resources, id) do
+    case Map.get(resources, Store.key(id)) do
+      nil -> to_string(id)
+      resource -> resource.text
+    end
+  end
 
   # CPM runs when something shows it, and only again when the store changes.
   defp analysis(a, show_critical) do
@@ -627,7 +681,7 @@ defmodule GanttEx.Live.Gantt do
       drag: if(editable and not summary, do: "move", else: "none"),
       resizable: editable and not summary and task.type != :milestone,
       progress_editable: editable and task.type != :milestone,
-      linkable: not a.readonly and a.links_editable,
+      linkable: not a.readonly and a.links_editable and not bar.group,
       class: a.task_class && a.task_class.(task),
       constraint_x: constraint_x(task, bar, a),
       deadline: deadline(task, bar, a),
@@ -738,7 +792,7 @@ defmodule GanttEx.Live.Gantt do
   defp snap_px(timeline, unit) do
     case Timeline.unit_width(timeline, unit) do
       nil -> ""
-      width -> Float.to_string(Float.round(width, 3))
+      width -> :erlang.float_to_binary(width / 1, [:compact, decimals: 3])
     end
   end
 
@@ -789,7 +843,11 @@ defmodule GanttEx.Live.Gantt do
       data-gx-snap={@snap_px}
       data-gx-readonly={to_string(@readonly)}
       data-gx-drag-create={to_string(@drag_create and not @readonly)}
-      data-gx-reorder={to_string(@reorder and not @readonly and is_nil(@sort) and is_nil(@filter))}
+      data-gx-reorder={
+        to_string(
+          @reorder and not @readonly and is_nil(@sort) and is_nil(@filter) and is_nil(@group_by)
+        )
+      }
       data-gx-window={@window}
       phx-hook={@hook}
       phx-target={@myself}
@@ -842,7 +900,7 @@ defmodule GanttEx.Live.Gantt do
               <div :if={@spacer_top > 0} class="gx-spacer" style={"height: #{@spacer_top}px"}></div>
               <.grid_row
                 :for={row <- @window_rows}
-                :key={row.key}
+                :key={row.uid}
                 ctx={@ctx}
                 row={row}
                 columns={@columns}
@@ -943,16 +1001,10 @@ defmodule GanttEx.Live.Gantt do
 
   def handle_event("toggle", %{"key" => key}, socket) do
     socket =
-      with_task(socket, key, fn task ->
-        collapsed = socket.assigns.collapsed
-
-        collapsed =
-          if MapSet.member?(collapsed, task.id),
-            do: MapSet.delete(collapsed, task.id),
-            else: MapSet.put(collapsed, task.id)
-
-        assign(socket, collapsed: collapsed, quick_info_key: nil)
-      end)
+      case Enum.find(socket.assigns.rows, &(&1.key == key and &1.has_children)) do
+        nil -> socket
+        row -> socket |> toggle_row(row) |> assign(quick_info_key: nil)
+      end
 
     {:noreply, prepare(socket)}
   end
@@ -1793,6 +1845,7 @@ defmodule GanttEx.Live.Gantt do
 
   defp select_row(socket, index) do
     rows = socket.assigns.rows
+    index = skip_groups(rows, index |> max(0) |> min(length(rows) - 1), socket.assigns.selected)
 
     case rows != [] && Enum.at(rows, index |> max(0) |> min(length(rows) - 1)) do
       false ->
@@ -1808,6 +1861,17 @@ defmodule GanttEx.Live.Gantt do
         })
         |> prepare()
     end
+  end
+
+  # Group rows cannot be selected: move to the next task row in the same direction.
+  defp skip_groups(rows, index, selected) do
+    current = Enum.find_index(rows, &(&1.key == selected)) || -1
+    step = if index < current, do: -1, else: 1
+
+    index
+    |> Stream.iterate(&(&1 + step))
+    |> Stream.take_while(&(&1 >= 0 and &1 < length(rows)))
+    |> Enum.find(index, &(not Enum.at(rows, &1)[:group]))
   end
 
   defp expand_or_descend(socket, row, index) do

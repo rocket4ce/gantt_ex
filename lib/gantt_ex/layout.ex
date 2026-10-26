@@ -115,10 +115,11 @@ defmodule GanttEx.Layout do
               segment: true
           }
 
+    # a task shown several times (grouping) is linked from its first bar
     bar_index =
-      bars
+      segments
       |> Map.new(&{&1.key, &1})
-      |> then(&Map.merge(Map.new(segments, fn s -> {s.key, s} end), &1))
+      |> Map.merge(bars |> Enum.reverse() |> Map.new(&{&1.key, &1}))
 
     links =
       for link <- Store.links(store),
@@ -177,8 +178,9 @@ defmodule GanttEx.Layout do
       height: bar_height,
       progress: task.progress,
       baseline: baselines && baseline(task, timeline, y + bar_height + 2),
-      uid: row.key,
-      segment: false
+      uid: row[:uid] || row.key,
+      segment: false,
+      group: row[:group] || false
     }
   end
 

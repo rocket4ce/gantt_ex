@@ -532,6 +532,25 @@ defmodule GanttEx.Live.Styles do
         font-weight: 600;
       }
 
+      .gx-row--group {
+        font-weight: 650;
+        background: var(--gx-surface);
+      }
+
+      .gx-count {
+        flex: none;
+        min-width: 20px;
+        padding: 0 6px;
+        margin-left: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 18px;
+        text-align: center;
+        color: var(--gx-muted);
+        background: var(--gx-surface-2);
+        border-radius: 999px;
+      }
+
       .gx-row--dragging {
         opacity: 0.45;
       }

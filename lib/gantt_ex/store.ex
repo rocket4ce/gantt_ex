@@ -98,7 +98,10 @@ defmodule GanttEx.Store do
           parent_key: key() | nil,
           has_children: boolean(),
           open: boolean(),
-          wbs: String.t()
+          wbs: String.t(),
+          uid: String.t(),
+          group: boolean(),
+          count: non_neg_integer() | nil
         }
 
   @date_fields [:start_date, :end_date, :duration]
@@ -611,6 +614,13 @@ defmodule GanttEx.Store do
       while filtering.
     * `:sort` - `{field, :asc | :desc}` to sort siblings by a task field or a
       `:meta` key. The tree structure is preserved.
+    * `:group_by` - `{group_fun, label_fun}` to group tasks (projects with
+      children excluded) under virtual group rows. `group_fun` returns the
+      group of a task, a list of groups, or `nil`; `label_fun` returns the
+      label of a group. Group rows have `group: true`, a virtual project task
+      spanning its members and `count`; collapsed groups are identified by
+      `{:group, value}` in `:collapsed`. Rows have a unique `uid`, as a task
+      can appear in several groups.
 
   ## Examples
 
@@ -642,8 +652,93 @@ defmodule GanttEx.Store do
       wbs: wbs_codes(store)
     }
 
-    {rows, _index} = walk_rows(ctx, nil, nil, 0, {[], 0})
+    case Keyword.get(opts, :group_by) do
+      nil ->
+        {rows, _index} = walk_rows(ctx, nil, nil, 0, {[], 0})
+        Enum.reverse(rows)
+
+      {group_fun, label_fun} ->
+        grouped_rows(ctx, group_fun, label_fun)
+    end
+  end
+
+  defp grouped_rows(ctx, group_fun, label_fun) do
+    store = ctx.store
+
+    members =
+      for task <- tasks(store),
+          not (task.type == :project and has_children?(store, task.id)),
+          is_nil(ctx.visible) or MapSet.member?(ctx.visible, task.id),
+          group <- List.wrap(group_fun.(task) || [nil]),
+          do: {group, task}
+
+    groups = members |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
+
+    {rows, _index} =
+      Enum.reduce(groups, {[], 0}, fn group, {rows, index} ->
+        tasks = for {^group, task} <- members, do: task
+        tasks = sort_siblings(tasks, ctx.sort)
+        id = {:group, group}
+        group_key = "g:" <> if(is_nil(group), do: "none", else: key(group))
+        open = not MapSet.member?(ctx.collapsed, id)
+
+        header = %{
+          task: group_task(id, label_fun.(group), tasks, store),
+          key: group_key,
+          uid: group_key,
+          index: index,
+          level: 0,
+          parent_key: nil,
+          has_children: true,
+          open: open,
+          wbs: "",
+          group: true,
+          count: length(tasks)
+        }
+
+        acc = {[header | rows], index + 1}
+
+        if open do
+          Enum.reduce(tasks, acc, fn task, {rows, index} ->
+            key = key(task.id)
+
+            row = %{
+              task: task,
+              key: key,
+              uid: group_key <> "/" <> key,
+              index: index,
+              level: 1,
+              parent_key: group_key,
+              has_children: false,
+              open: false,
+              wbs: Map.fetch!(ctx.wbs, task.id),
+              group: false,
+              count: nil
+            }
+
+            {[row | rows], index + 1}
+          end)
+        else
+          acc
+        end
+      end)
+
     Enum.reverse(rows)
+  end
+
+  defp group_task(id, label, tasks, store) do
+    start = tasks |> Enum.map(& &1.start_date) |> Enum.reduce(nil, &Dates.min/2)
+    finish = tasks |> Enum.map(& &1.end_date) |> Enum.reduce(nil, &Dates.max/2)
+
+    %Task{
+      id: id,
+      text: to_string(label),
+      type: :project,
+      start_date: start,
+      end_date: finish,
+      duration: if(start && finish, do: Dates.diff(start, finish, store.duration_unit), else: 0),
+      readonly: true
+    }
   end
 
   defp walk_rows(ctx, parent, parent_key, level, acc) do
@@ -666,7 +761,10 @@ defmodule GanttEx.Store do
           parent_key: parent_key,
           has_children: has_children,
           open: open,
-          wbs: Map.fetch!(ctx.wbs, task.id)
+          wbs: Map.fetch!(ctx.wbs, task.id),
+          uid: key,
+          group: false,
+          count: nil
         }
 
         acc = {[row | rows], index + 1}

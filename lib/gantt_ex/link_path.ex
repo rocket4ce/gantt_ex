@@ -109,7 +109,7 @@ defmodule GanttEx.LinkPath do
 
     if rounded == Float.round(rounded),
       do: Integer.to_string(trunc(rounded)),
-      else: Float.to_string(rounded)
+      else: :erlang.float_to_binary(rounded, [:compact, decimals: 1])
   end
 
   defp dedup(points) do
