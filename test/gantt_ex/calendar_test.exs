@@ -27,6 +27,23 @@ defmodule GanttEx.CalendarTest do
     assert Calendar.diff(calendar, ~N[2025-01-07 00:00:00], ~N[2025-01-14 00:00:00], :day) == 5
   end
 
+  test "long ranges count whole weeks and then the exceptions", %{calendar: calendar} do
+    # a holiday on a Sunday changes nothing
+    calendar = %{calendar | dates: Map.put(calendar.dates, ~D[2025-01-12], [])}
+
+    for last <- Date.range(~D[2025-01-06], ~D[2025-04-30]) do
+      expected =
+        Enum.count(Date.range(~D[2025-01-06], last), &Calendar.working_day?(calendar, &1))
+
+      to = NaiveDateTime.new!(Date.add(last, 1), ~T[00:00:00])
+      assert Calendar.diff(calendar, ~N[2025-01-06 00:00:00], to, :day) == expected
+    end
+
+    # Mon 6 from 10:00 (6h), 41 full working days (328h), Wed Mar 5 until 10:00 (2h)
+    assert Calendar.diff(calendar, ~N[2025-01-06 10:00:00], ~N[2025-03-05 10:00:00], :hour) ==
+             336
+  end
+
   test "hour arithmetic walks across days and lunch breaks" do
     calendar = Calendar.new!()
     assert Calendar.add(calendar, ~N[2025-01-10 15:00:00], 4, :hour) == ~N[2025-01-13 10:00:00]

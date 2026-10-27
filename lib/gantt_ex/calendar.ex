@@ -358,29 +358,21 @@ defmodule GanttEx.Calendar do
     first = NaiveDateTime.to_date(from)
     # a day counts when the range reaches into it
     last = to |> NaiveDateTime.add(-1, :second) |> NaiveDateTime.to_date()
-    Date.range(first, last) |> Enum.count(&working_day?(calendar, &1))
+    sum_dates(calendar, first, last, &if(&1 == [], do: 0, else: 1))
   end
 
   defp do_diff(calendar, from, to, unit) when unit in [:hour, :minute] do
+    first = NaiveDateTime.to_date(from)
+    last = NaiveDateTime.to_date(to)
+
     minutes =
-      Date.range(NaiveDateTime.to_date(from), NaiveDateTime.to_date(to))
-      |> Enum.map(fn date ->
-        low =
-          if Date.compare(date, NaiveDateTime.to_date(from)) == :eq,
-            do: minute_of_day(from),
-            else: 0
-
-        high =
-          if Date.compare(date, NaiveDateTime.to_date(to)) == :eq,
-            do: minute_of_day(to),
-            else: 1440
-
-        calendar
-        |> hours_for(date)
-        |> Enum.map(fn {a, b} -> max(min(b, high) - max(a, low), 0) end)
-        |> Enum.sum()
-      end)
-      |> Enum.sum()
+      if first == last do
+        clipped_minutes(calendar, first, minute_of_day(from), minute_of_day(to))
+      else
+        clipped_minutes(calendar, first, minute_of_day(from), 1440) +
+          sum_dates(calendar, Date.add(first, 1), Date.add(last, -1), &hours_minutes/1) +
+          clipped_minutes(calendar, last, 0, minute_of_day(to))
+      end
 
     round(if unit == :hour, do: minutes / 60, else: minutes)
   end
@@ -403,6 +395,46 @@ defmodule GanttEx.Calendar do
     else
       []
     end
+  end
+
+  # Sums `value.(hours)` over the working periods of the dates from `first`
+  # to `last`. Long ranges count whole weeks at once and then correct the
+  # dates with exceptions, instead of visiting every date.
+  defp sum_dates(calendar, first, last, value) do
+    days = Date.diff(last, first) + 1
+
+    if days <= 7 + map_size(calendar.dates) do
+      first
+      |> Date.range(last, 1)
+      |> Enum.reduce(0, &(value.(hours_for(calendar, &1)) + &2))
+    else
+      weekly = &value.(weekday_hours(calendar, &1))
+      # ISO day of the week of `first`, from 0 (Monday) to 6
+      offset = Date.day_of_week(first) - 1
+      week = Enum.sum_by(1..7, weekly)
+      rest = Enum.sum_by(0..(rem(days, 7) - 1)//1, &weekly.(rem(offset + &1, 7) + 1))
+
+      exceptions =
+        for {date, hours} <- calendar.dates,
+            Date.compare(date, first) != :lt and Date.compare(date, last) != :gt,
+            reduce: 0,
+            do: (acc -> acc + value.(hours) - weekly.(Date.day_of_week(date)))
+
+      div(days, 7) * week + rest + exceptions
+    end
+  end
+
+  # The hours of an ISO day of the week, ignoring the exceptions of the calendar.
+  defp weekday_hours(calendar, day),
+    do: if(day in calendar.work_days, do: calendar.hours, else: [])
+
+  defp hours_minutes(hours), do: Enum.sum_by(hours, fn {from, to} -> to - from end)
+
+  # The working minutes of `date` between the minutes `low` and `high`.
+  defp clipped_minutes(calendar, date, low, high) do
+    calendar
+    |> hours_for(date)
+    |> Enum.sum_by(fn {a, b} -> max(min(b, high) - max(a, low), 0) end)
   end
 
   # -- walking -----------------------------------------------------------------
