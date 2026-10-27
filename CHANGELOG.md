@@ -1,6 +1,41 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 (2026-10-26)
+
+Performance with large plans. Measured on a real plan of 7,000 tasks and
+10,700 links, all under one summary task:
+
+- `GanttEx.Store.new/3` validates the links in bulk (21 s to 0.2 s)
+- `GanttEx.CriticalPath.analyze/1` indexes the links by task and counts
+  working time by whole weeks (25 s to 0.2 s)
+- `GanttEx.Dependency.order/2` is no longer quadratic (11 s to 0.05 s)
+- `GanttEx.Scheduler.schedule/2` rolls up projects once instead of after
+  every moved task (47 s to 0.1 s)
+
+Results are the same as in 0.1.0.
+
+Additions:
+
+- `GanttEx.Dependency.index/1`, accepted by `GanttEx.Dependency.order/2`,
+  `GanttEx.Dependency.earliest_start/3` and
+  `GanttEx.Scheduler.target_start/4`
+- `GanttEx.Store.rollup/2` and the `:rollup` option of
+  `GanttEx.Store.update_task/4`
+
+## 0.1.0 (2026-10-26)
+
+First version, covering the features of the DHTMLX Gantt community edition:
+
+- `GanttEx.Live.Gantt` LiveComponent with grid, timeline, drag & drop,
+  dependencies, lightbox, inline editing, quick info, tooltips, keyboard
+  navigation, zoom, fullscreen, print and export
+- Data model (`GanttEx.Task`, `GanttEx.Link`, `GanttEx.Store`) with
+  scheduling rules, project roll-up and cycle detection
+- `GanttEx.Event` notifications to persist changes
+- Smart rendering of large charts (only the rows around the viewport)
+- Export to JSON, CSV, iCalendar, MS Project XML, SVG and PNG; import from
+  DHTMLX JSON/XML and MS Project XML (safe XML parsing, no atoms created)
+- Translations for en, es, fr, it, de, pt, pt_BR and ja
 
 Features of the DHTMLX Gantt PRO edition:
 
@@ -16,23 +51,3 @@ Features of the DHTMLX Gantt PRO edition:
 - Multi-selection, bulk deletion and multi-drag
 - Timeline markers (`GanttEx.Marker`) and WBS codes
 - Dynamic loading (`:branch_requested` events) and auto types
-
-Fixes:
-
-- Pixel values were rendered in exponent notation (`1.2e3px`) for some
-  round numbers
-
-## 0.1.0 (unreleased)
-
-First version, covering the features of the DHTMLX Gantt community edition:
-
-- `GanttEx.Live.Gantt` LiveComponent with grid, timeline, drag & drop,
-  dependencies, lightbox, inline editing, quick info, tooltips, keyboard
-  navigation, zoom, fullscreen, print and export
-- Data model (`GanttEx.Task`, `GanttEx.Link`, `GanttEx.Store`) with
-  scheduling rules, project roll-up and cycle detection
-- `GanttEx.Event` notifications to persist changes
-- Smart rendering of large charts (only the rows around the viewport)
-- Export to JSON, CSV, iCalendar, MS Project XML, SVG and PNG; import from
-  DHTMLX JSON/XML and MS Project XML (safe XML parsing, no atoms created)
-- Translations for en, es, fr, it, de, pt, pt_BR and ja
