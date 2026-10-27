@@ -38,6 +38,27 @@ defmodule GanttEx.CriticalPathTest do
     assert MapSet.member?(analysis.links, 1)
   end
 
+  test "nested projects take their most critical descendant" do
+    store =
+      Store.new!(
+        [
+          %{id: 100, type: :project},
+          %{id: 10, parent: 100, type: :project},
+          %{id: 11, parent: 10, start_date: ~D[2025-01-06], duration: 4},
+          %{id: 12, parent: 100, start_date: ~D[2025-01-06], duration: 1},
+          %{id: 20, type: :project, start_date: ~D[2025-01-06]}
+        ],
+        []
+      )
+
+    analysis = CriticalPath.analyze(store)
+    assert analysis.tasks[10] == analysis.tasks[11]
+    assert analysis.tasks[100] == analysis.tasks[11]
+    assert analysis.tasks[12].total_slack == 3
+    # a project without children is scheduled like a task
+    assert Map.has_key?(analysis.tasks, 20)
+  end
+
   test "slack counts working days" do
     store =
       Store.new!(

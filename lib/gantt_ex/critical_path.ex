@@ -63,8 +63,11 @@ defmodule GanttEx.CriticalPath do
   """
   @spec analyze(Store.t()) :: t()
   def analyze(%Store{} = store) do
-    order = Dependency.order(store)
+    index = Dependency.index(store)
+    order = Dependency.order(store, index)
     tasks = Map.new(order, &{&1, Store.get_task(store, &1)})
+    successors = Map.new(Store.links(store), &{&1.id, successors(store, &1)})
+    ctx = %{store: store, index: index, successors: successors}
 
     project_end =
       tasks |> Map.values() |> Enum.map(& &1.end_date) |> Enum.reduce(nil, &Dates.max/2)
@@ -74,7 +77,7 @@ defmodule GanttEx.CriticalPath do
       |> Enum.reverse()
       |> Enum.reduce(%{}, fn id, late ->
         task = Map.fetch!(tasks, id)
-        finish = latest_finish(store, task, late) || project_end
+        finish = latest_finish(ctx, task, late) || project_end
         start = Store.add_duration(store, task, finish, -(task.duration || 0))
         Map.put(late, id, {start, finish})
       end)
@@ -89,7 +92,7 @@ defmodule GanttEx.CriticalPath do
          %{
            critical: total <= 0,
            total_slack: total,
-           free_slack: free_slack(store, task, project_end),
+           free_slack: free_slack(ctx, task, project_end),
            late_start: late_start,
            late_finish: late_finish
          }}
@@ -97,20 +100,23 @@ defmodule GanttEx.CriticalPath do
 
     %{
       tasks: Map.merge(results, project_results(store, results)),
-      links: critical_links(store, results),
+      links: critical_links(ctx, results),
       project_end: project_end
     }
   end
 
+  # The links whose source is `task` or one of its ancestors.
+  defp outgoing(ctx, task), do: Map.get(ctx.index.outgoing, task.id, [])
+
   # The latest finish allowed by the successors of `task` (nil when none).
-  defp latest_finish(store, task, late) do
-    store
-    |> Dependency.outgoing(task)
+  defp latest_finish(ctx, task, late) do
+    ctx
+    |> outgoing(task)
     |> Enum.flat_map(fn link ->
-      for successor <- successors(store, link),
+      for successor <- Map.fetch!(ctx.successors, link.id),
           {late_start, late_finish} = Map.get(late, successor.id, {nil, nil}),
           late_start != nil do
-        Dependency.finish_bound(store, task, link, late_start, late_finish)
+        Dependency.finish_bound(ctx.store, task, link, late_start, late_finish)
       end
     end)
     |> Enum.reduce(nil, &Dates.min/2)
@@ -138,12 +144,14 @@ defmodule GanttEx.CriticalPath do
     end
   end
 
-  defp free_slack(store, task, project_end) do
+  defp free_slack(ctx, task, project_end) do
+    store = ctx.store
+
     slacks =
-      store
-      |> Dependency.outgoing(task)
+      ctx
+      |> outgoing(task)
       |> Enum.flat_map(fn link ->
-        for successor <- successors(store, link),
+        for successor <- Map.fetch!(ctx.successors, link.id),
             bound = Dependency.start_bound(store, successor, link),
             bound != nil,
             do: Store.duration_between(store, successor, bound, successor.start_date)
@@ -158,32 +166,49 @@ defmodule GanttEx.CriticalPath do
     end
   end
 
-  defp critical_links(store, results) do
-    for link <- Store.links(store),
-        source_ids = Dependency.source_ids(store, link),
-        Enum.any?(source_ids, &critical?(results, &1)),
-        successor <- successors(store, link),
+  defp critical_links(ctx, results) do
+    for link <- Store.links(ctx.store),
+        Enum.any?(Map.fetch!(ctx.index.sources, link.id), &critical?(results, &1)),
+        successor <- Map.fetch!(ctx.successors, link.id),
         critical?(results, successor.id),
-        bound = Dependency.start_bound(store, successor, link),
+        bound = Dependency.start_bound(ctx.store, successor, link),
         bound != nil,
-        Store.duration_between(store, successor, bound, successor.start_date) <= 0,
+        Store.duration_between(ctx.store, successor, bound, successor.start_date) <= 0,
         into: MapSet.new(),
         do: link.id
   end
 
   defp critical?(results, id), do: match?(%{critical: true}, Map.get(results, id))
 
+  # Projects with children take the result of their most critical descendant.
+  # Computed bottom-up so every subtree is visited once.
   defp project_results(store, results) do
-    for task <- Store.tasks(store),
-        not Map.has_key?(results, task.id),
-        descendants =
-          Store.descendant_ids(store, task.id)
-          |> Enum.map(&Map.get(results, &1))
-          |> Enum.reject(&is_nil/1),
-        descendants != [],
-        into: %{} do
-      worst = Enum.min_by(descendants, & &1.total_slack)
-      {task.id, %{worst | critical: Enum.any?(descendants, & &1.critical)}}
-    end
+    {_worst, projects} = rollup_results(store, nil, results, %{})
+    projects
+  end
+
+  # Returns `{worst, projects}`: the worst result among the descendants of
+  # `id` (nil when none has one) and the results of the projects below it.
+  defp rollup_results(store, id, results, projects) do
+    Enum.reduce(Store.child_ids(store, id), {nil, projects}, fn child, {worst, projects} ->
+      {below, projects} = rollup_results(store, child, results, projects)
+
+      projects =
+        if below && not Map.has_key?(results, child),
+          do: Map.put(projects, child, below),
+          else: projects
+
+      {worst |> worse(Map.get(results, child)) |> worse(below), projects}
+    end)
+  end
+
+  # The result with the least total slack (the first one on ties), critical
+  # when any of the two is.
+  defp worse(nil, result), do: result
+  defp worse(result, nil), do: result
+
+  defp worse(a, b) do
+    worst = if b.total_slack < a.total_slack, do: b, else: a
+    %{worst | critical: a.critical or b.critical}
   end
 end

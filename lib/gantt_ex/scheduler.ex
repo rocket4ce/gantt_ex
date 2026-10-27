@@ -51,12 +51,14 @@ defmodule GanttEx.Scheduler do
   @spec schedule(Store.t(), keyword()) :: {:ok, Store.t(), [Store.change()]}
   def schedule(%Store{} = store, opts \\ []) do
     strict = Keyword.get(opts, :strict, false)
-    order = Dependency.order(store)
+    # moving tasks only changes dates, so the index holds for the whole pass
+    index = Dependency.index(store)
+    order = Dependency.order(store, index)
 
     {store, changes} =
       Enum.reduce(order, {store, []}, fn id, {store, acc} ->
         task = Store.get_task(store, id)
-        move(store, task, target_start(store, task, strict), acc)
+        move(store, task, target_start(store, task, strict, index), acc)
       end)
 
     {store, changes} =
@@ -66,13 +68,14 @@ defmodule GanttEx.Scheduler do
         task = Store.get_task(store, id)
 
         if task.constraint_type == :alap,
-          do: move(store, task, alap_start(store, task), acc),
+          do: move(store, task, alap_start(store, task, index), acc),
           else: {store, acc}
       end)
 
-    {:ok, store, compact(changes)}
+    {:ok, store, changes |> Enum.reverse() |> compact()}
   end
 
+  # `acc` holds the changes in reverse order.
   defp move(store, _task, nil, acc), do: {store, acc}
 
   defp move(store, task, start, acc) do
@@ -80,15 +83,17 @@ defmodule GanttEx.Scheduler do
       {store, acc}
     else
       {:ok, store, changes} = Store.update_task(store, task.id, %{start_date: start})
-      {store, acc ++ changes}
+      {store, Enum.reverse(changes, acc)}
     end
   end
 
   @doc """
-  Returns the start date `task` should have, or `nil` to keep it.
+  Returns the start date `task` should have, or `nil` to keep it. Pass the
+  `GanttEx.Dependency.index/1` of the store when you already have it.
   """
-  @spec target_start(Store.t(), Task.t(), boolean()) :: NaiveDateTime.t() | nil
-  def target_start(store, %Task{} = task, strict \\ false) do
+  @spec target_start(Store.t(), Task.t(), boolean(), Dependency.index() | nil) ::
+          NaiveDateTime.t() | nil
+  def target_start(store, %Task{} = task, strict \\ false, index \\ nil) do
     date = task.constraint_date
     back = fn date -> Store.add_duration(store, task, date, -(task.duration || 0)) end
 
@@ -102,7 +107,7 @@ defmodule GanttEx.Scheduler do
       {type, date} ->
         lower =
           [
-            Dependency.earliest_start(store, task),
+            Dependency.earliest_start(store, task, index),
             type == :snet && date,
             type == :fnet && date && back.(date)
           ]
@@ -129,13 +134,13 @@ defmodule GanttEx.Scheduler do
 
   # As late as possible: right before the earliest successor needs it, or at
   # the end of the project when nothing depends on it.
-  defp alap_start(store, task) do
+  defp alap_start(store, task, index) do
     project_end =
       store |> Store.tasks() |> Enum.map(& &1.end_date) |> Enum.reduce(nil, &Dates.max/2)
 
     latest_finish =
-      store
-      |> Dependency.outgoing(task)
+      index.outgoing
+      |> Map.get(task.id, [])
       |> Enum.map(fn link ->
         case Store.get_task(store, link.target) do
           nil -> nil
@@ -147,7 +152,7 @@ defmodule GanttEx.Scheduler do
 
     finish = latest_finish || project_end
     start = Store.add_duration(store, task, finish, -(task.duration || 0))
-    Dates.max(start, Dependency.earliest_start(store, task) || start)
+    Dates.max(start, Dependency.earliest_start(store, task, index) || start)
   end
 
   @doc """
