@@ -55,11 +55,14 @@ defmodule GanttEx.Scheduler do
     index = Dependency.index(store)
     order = Dependency.order(store, index)
 
-    {store, changes} =
-      Enum.reduce(order, {store, []}, fn id, {store, acc} ->
+    {store, changes, pending} =
+      Enum.reduce(order, {store, [], MapSet.new()}, fn id, {store, acc, pending} ->
+        {store, acc, pending} = rollup_sources(store, acc, pending, index, id)
         task = Store.get_task(store, id)
-        move(store, task, target_start(store, task, strict, index), acc)
+        defer_move(store, task, target_start(store, task, strict, index), acc, pending)
       end)
+
+    {store, changes, _pending} = rollup_pending(store, changes, pending)
 
     {store, changes} =
       order
@@ -85,6 +88,38 @@ defmodule GanttEx.Scheduler do
       {:ok, store, changes} = Store.update_task(store, task.id, %{start_date: start})
       {store, Enum.reverse(changes, acc)}
     end
+  end
+
+  # Projects are rolled up lazily, since one with thousands of children would
+  # otherwise be recomputed after each move: `pending` holds the ancestors of
+  # the moved tasks, rolled up before a link reads their dates and at the end.
+  defp defer_move(store, _task, nil, acc, pending), do: {store, acc, pending}
+
+  defp defer_move(store, task, start, acc, pending) do
+    if NaiveDateTime.compare(start, task.start_date) == :eq do
+      {store, acc, pending}
+    else
+      {:ok, store, changes} =
+        Store.update_task(store, task.id, %{start_date: start}, rollup: false)
+
+      pending =
+        if task.parent == nil or MapSet.member?(pending, task.parent),
+          do: pending,
+          else: MapSet.union(pending, MapSet.new(Store.ancestor_ids(store, task.id)))
+
+      {store, Enum.reverse(changes, acc), pending}
+    end
+  end
+
+  defp rollup_sources(store, acc, pending, index, id) do
+    if index.incoming |> Map.get(id, []) |> Enum.any?(&MapSet.member?(pending, &1.source)),
+      do: rollup_pending(store, acc, pending),
+      else: {store, acc, pending}
+  end
+
+  defp rollup_pending(store, acc, pending) do
+    {store, changes} = Store.rollup(store, MapSet.to_list(pending))
+    {store, Enum.reverse(changes, acc), MapSet.new()}
   end
 
   @doc """

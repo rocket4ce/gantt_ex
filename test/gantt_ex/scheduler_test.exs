@@ -114,6 +114,28 @@ defmodule GanttEx.SchedulerTest do
     assert start(s, 20) == ~N[2025-01-11 00:00:00]
   end
 
+  test "links from an outer project see the moves of nested children" do
+    tasks = [
+      @a,
+      %{id: 100, type: :project},
+      %{id: 10, parent: 100, type: :project},
+      %{id: 11, parent: 10, start_date: ~D[2025-01-06], duration: 2},
+      %{id: 20, start_date: ~D[2025-01-06], duration: 1}
+    ]
+
+    links = [%{id: 1, source: 1, target: 11}, %{id: 2, source: 100, target: 20}]
+    {:ok, s, changes} = store(tasks, links) |> Scheduler.schedule()
+
+    # 11 follows 1 (ends Jan 11), so both projects end on Jan 11 and 20 follows them
+    assert start(s, 11) == ~N[2025-01-09 00:00:00]
+    assert Store.get_task(s, 100).end_date == ~N[2025-01-11 00:00:00]
+    assert start(s, 20) == ~N[2025-01-11 00:00:00]
+
+    changed = for {:task_updated, task, _} <- changes, into: %{}, do: {task.id, task}
+    assert Map.keys(changed) |> Enum.sort() == [10, 11, 20, 100]
+    assert changed[100] == Store.get_task(s, 100)
+  end
+
   test "honors working time" do
     tasks = [
       %{id: 1, start_date: ~D[2025-01-08], duration: 2},

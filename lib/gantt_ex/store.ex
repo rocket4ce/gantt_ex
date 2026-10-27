@@ -547,9 +547,20 @@ defmodule GanttEx.Store do
     order |> Enum.reverse() |> Enum.map(&Map.fetch!(merged, &1))
   end
 
-  # Recomputes the given projects and all their ancestors (deepest first) and
-  # reports the ones whose dates changed.
-  defp rollup(store, ids) do
+  @doc """
+  Recomputes the dates of the given projects and all their ancestors
+  (deepest first) from their children, and reports the ones that changed.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, type: :project}, %{id: 2, parent: 1, start_date: ~D[2025-01-06], duration: 2}])
+      iex> {:ok, store, _} = GanttEx.Store.update_task(store, 2, %{duration: 4}, rollup: false)
+      iex> GanttEx.Store.get_task(store, 1).end_date
+      ~N[2025-01-08 00:00:00]
+      iex> {store, [{:task_updated, %{id: 1}, %{changes: changes}}]} = GanttEx.Store.rollup(store, [1])
+      iex> {changes, GanttEx.Store.get_task(store, 1).end_date}
+      {%{end_date: ~N[2025-01-10 00:00:00], duration: 4}, ~N[2025-01-10 00:00:00]}
+  """
+  @spec rollup(t(), [Task.id() | nil]) :: {t(), [change()]}
+  def rollup(%__MODULE__{} = store, ids) do
     chain =
       ids
       |> Enum.reject(&is_nil/1)
@@ -1006,6 +1017,12 @@ defmodule GanttEx.Store do
   duration is kept), changing the end or the duration resizes it. Changing
   `:parent` moves the task to the end of its new parent.
 
+  ## Options
+
+    * `:rollup` - recompute the dates of the ancestor projects. Defaults to
+      `true`. When updating many tasks, pass `false` and call `rollup/2` with
+      their parents once at the end.
+
       iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-01], duration: 2}])
       iex> {:ok, store, [{:task_updated, task, %{changes: changes}}]} = GanttEx.Store.update_task(store, 1, %{start_date: ~D[2025-01-10]})
       iex> {task.end_date, changes}
@@ -1013,9 +1030,9 @@ defmodule GanttEx.Store do
       iex> GanttEx.Store.update_task(store, 1, %{end_date: ~D[2024-01-01]})
       {:error, {:invalid, :end_date}}
   """
-  @spec update_task(t(), Task.id(), map() | keyword()) ::
+  @spec update_task(t(), Task.id(), map() | keyword(), keyword()) ::
           {:ok, t(), [change()]} | {:error, error()}
-  def update_task(%__MODULE__{} = store, id, attrs) do
+  def update_task(%__MODULE__{} = store, id, attrs, opts \\ []) do
     {known, _meta} = Task.split(attrs)
 
     with {:ok, old} <- fetch(store.tasks, id),
@@ -1031,7 +1048,9 @@ defmodule GanttEx.Store do
         end
 
       new = Map.fetch!(store.tasks, id)
-      {store, rollups} = rollup(store, [new.parent])
+
+      {store, rollups} =
+        if Keyword.get(opts, :rollup, true), do: rollup(store, [new.parent]), else: {store, []}
 
       changes =
         case field_changes(old, %{new | parent: old.parent}, nil) do
