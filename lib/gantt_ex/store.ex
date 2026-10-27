@@ -175,7 +175,7 @@ defmodule GanttEx.Store do
         store = rollup_all(store)
 
         with :ok <- check_dates(store) do
-          {:ok, Enum.reduce(links, store, &put_link_if_valid(&2, &1))}
+          {:ok, put_valid_links(store, links)}
         end
       end
     end
@@ -293,11 +293,66 @@ defmodule GanttEx.Store do
     end
   end
 
-  defp put_link_if_valid(store, link) do
-    case link_error(store, link) do
-      nil -> do_put_link(store, link)
-      _reason -> store
-    end
+  # Keeps the links `add_link/2` would accept when adding them one by one,
+  # without rebuilding the graph for every link: the valid links usually have
+  # no cycle, so all of them are kept at once.
+  defp put_valid_links(store, links) do
+    {candidates, _seen} =
+      Enum.flat_map_reduce(links, MapSet.new(), fn link, seen ->
+        dependency = {link.source, link.target, link.type}
+
+        if link.source == link.target or not Map.has_key?(store.tasks, link.source) or
+             not Map.has_key?(store.tasks, link.target) or MapSet.member?(seen, dependency),
+           do: {[], seen},
+           else: {[link], MapSet.put(seen, dependency)}
+      end)
+
+    links = if acyclic?(candidates), do: candidates, else: drop_cycles(candidates)
+
+    %{
+      store
+      | links: Map.new(links, &{&1.id, &1}),
+        link_keys: Map.new(links, &{key(&1.id), &1.id}),
+        link_order: Enum.map(links, & &1.id)
+    }
+  end
+
+  defp acyclic?(links) do
+    graph = Enum.group_by(links, & &1.source, & &1.target)
+    pending = Enum.frequencies_by(links, & &1.target)
+    roots = graph |> Map.keys() |> Enum.reject(&Map.has_key?(pending, &1))
+    peel(roots, graph, pending, 0) == length(links)
+  end
+
+  # Kahn's algorithm: counts the links left behind by tasks without pending
+  # predecessors. Links in or after a cycle are never counted.
+  defp peel([], _graph, _pending, count), do: count
+
+  defp peel([node | rest], graph, pending, count) do
+    targets = Map.get(graph, node, [])
+
+    {ready, pending} =
+      Enum.flat_map_reduce(targets, pending, fn target, pending ->
+        case Map.fetch!(pending, target) do
+          1 -> {[target], Map.delete(pending, target)}
+          left -> {[], Map.put(pending, target, left - 1)}
+        end
+      end)
+
+    peel(ready ++ rest, graph, pending, count + length(targets))
+  end
+
+  # Adds the links one by one, dropping the ones that close a cycle.
+  defp drop_cycles(links) do
+    {kept, _graph} =
+      Enum.reduce(links, {[], %{}}, fn link, {kept, graph} ->
+        if do_reachable?(graph, [link.target], link.source, MapSet.new()),
+          do: {kept, graph},
+          else:
+            {[link | kept], Map.update(graph, link.source, [link.target], &[link.target | &1])}
+      end)
+
+    Enum.reverse(kept)
   end
 
   # -- scheduling --------------------------------------------------------------
