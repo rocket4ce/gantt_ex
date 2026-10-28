@@ -33,6 +33,68 @@ end
 | `:link_updated` | `link`, `changes` | Type or lag changed. |
 | `:link_deleted` | `link` | Also sent for the links of deleted tasks. |
 | `:task_selected` | `task` | Not a change, useful for side panels. |
+| `:task_action` | `task`, `action` | A row action for you to handle: `:restriction`, `:detail` or a custom one. |
+| `:filters_changed` | `filters` | The search and filters selected by the user. |
+| `:columns_changed` | `columns` | The order, hidden columns and widths set by the user. |
+
+The last three are not changes of the plan: handle them before your
+generic clause.
+
+## Blocked tasks and restrictions
+
+`blocked` (boolean) and `restrictions` (the number of open restrictions)
+are task fields: add them to your schema (or compute `restrictions` in your
+query) and they are shown in the grid and on the bars.
+
+```elixir
+field :blocked, :boolean, default: false
+field :restrictions, :integer, virtual: true, default: 0
+```
+
+The `:block` row action updates the task like any other change, so you get
+`%GanttEx.Event{type: :task_updated, changes: %{blocked: true}}` and persist
+it with the rest of the fields.
+
+Restrictions usually live in their own table. The `:restriction` action
+only tells you that the user wants to add one: open your form, and render
+the chart with the new count once it is saved.
+
+```elixir
+def handle_info({GanttEx, %GanttEx.Event{type: :task_action, action: :restriction, task: task}}, socket),
+  do: {:noreply, assign(socket, restriction_form: Planning.new_restriction(task.id))}
+
+def handle_info({GanttEx, %GanttEx.Event{type: :task_action, action: :detail, task: task}}, socket),
+  do: {:noreply, push_patch(socket, to: ~p"/plans/#{socket.assigns.plan}/tasks/#{task.id}")}
+```
+
+## Filters and columns
+
+`:filters_changed` and `:columns_changed` events carry plain data (atoms,
+strings, `Date`s), so they can be stored as user preferences and given back
+as `filter_values` and `column_layout`:
+
+```elixir
+def mount(_params, _session, socket) do
+  prefs = Preferences.get(socket.assigns.current_scope, :gantt)
+  {:ok, assign(socket, filter_values: prefs.filters, column_layout: prefs.columns)}
+end
+
+def handle_info({GanttEx, %GanttEx.Event{type: :filters_changed, filters: filters}}, socket) do
+  Preferences.put(socket.assigns.current_scope, :gantt, filters: filters)
+  {:noreply, assign(socket, filter_values: filters)}
+end
+
+def handle_info({GanttEx, %GanttEx.Event{type: :columns_changed, columns: layout}}, socket) do
+  Preferences.put(socket.assigns.current_scope, :gantt, columns: layout)
+  {:noreply, assign(socket, column_layout: layout)}
+end
+```
+
+Rendering the chart with the same values again does not interrupt the user;
+a different value replaces the selection. Stored as JSON, atoms come back
+as strings and dates as ISO strings: both are accepted (unknown values are
+dropped), so `%{"status" => ["blocked"], "dates" => %{"from" => "2025-01-06"}}`
+restores the same filters.
 
 ## A schema that maps 1:1
 

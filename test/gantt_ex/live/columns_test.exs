@@ -59,6 +59,19 @@ defmodule GanttEx.Live.ColumnsTest do
            }
   end
 
+  test "layouts stored as JSON are restored" do
+    layout = %{
+      order: ["cost", "text"],
+      hidden: ["add"],
+      widths: %{"cost" => 140},
+      grid_width: nil
+    }
+
+    stored = layout |> JSON.encode!() |> JSON.decode!()
+
+    assert Columns.normalize_layout(stored) == Columns.normalize_layout(layout)
+  end
+
   test "layouts accept keyword lists and ignore garbage" do
     assert Columns.normalize_layout(
              order: [:text],

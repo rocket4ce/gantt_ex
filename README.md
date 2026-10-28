@@ -17,6 +17,15 @@ These are the features of the DHTMLX Gantt community edition:
 
 - **Task grid**: tree, configurable columns (slots), sorting, resizable
   columns and grid, inline editing
+- **Column chooser**: hidden columns the user can add, show/hide, reorder
+  (drag the headers or use the chooser) and reset, with a restorable layout
+- **Search and filters**: accent-insensitive search on names and WBS codes,
+  status (overdue, critical, blocked, with restrictions...), type, dates and
+  your own fields as searchable comboboxes, with restorable values
+- **Row actions**: drag handle, rename, edit, block/unblock, add a
+  restriction, open the detail, delete and your own actions
+- **Status indicators**: blocked tasks and open restrictions (Last Planner
+  System) in the grid, the bars, tooltips and quick info
 - **Task types**: tasks, projects (dates rolled up from their children) and milestones
 - **Drag & drop**: move, resize and change progress, with snapping; reorder
   and re-parent rows
@@ -125,6 +134,35 @@ field ends up in `task.meta` and can be shown in custom columns.
   <:column field={:duration} />
   <:column field={:add} />
 </.live_component>
+```
+
+Filters, row actions and columns are configured with attributes and slots,
+and the chart reports what the user chose so you can keep it:
+
+```heex
+<.live_component
+  module={GanttEx.Live.Gantt}
+  id="gantt"
+  tasks={@tasks}
+  links={@links}
+  filters={[:search, :status, %{id: :owner, label: "Owner", options: [{"Unassigned", nil} | @owners]}]}
+  filter_values={@saved_filters}
+  column_layout={@saved_columns}
+>
+  <:column field={:actions} actions={[:drag, :rename, :block, :restriction, :detail]} />
+  <:column field={:wbs} hidden />
+  <:column field={:text} tree />
+  <:column field={:start_date} />
+  <:column field={:cost} label="Cost" hidden :let={task}>{task.meta[:cost]}</:column>
+</.live_component>
+```
+
+```elixir
+def handle_info({GanttEx, %GanttEx.Event{type: :filters_changed, filters: filters}}, socket),
+  do: {:noreply, assign(socket, saved_filters: Preferences.save_filters!(filters))}
+
+def handle_info({GanttEx, %GanttEx.Event{type: :task_action, action: :detail, task: task}}, socket),
+  do: {:noreply, assign(socket, detail: task.id)}
 ```
 
 ## Guides

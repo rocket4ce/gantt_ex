@@ -10,6 +10,7 @@ defmodule GanttEx do
     * `GanttEx.Event` - the messages your LiveView receives to persist changes
     * `GanttEx.Task` and `GanttEx.Link` - the data model
     * `GanttEx.Store` - an immutable tree of tasks with scheduling rules
+    * `GanttEx.Filter` - search and filters
     * `GanttEx.Timeline`, `GanttEx.Scale`, `GanttEx.Zoom` and `GanttEx.Layout` - time to pixels
     * `GanttEx.Export` and `GanttEx.Import` - JSON, CSV, iCalendar and MS Project
     * `GanttEx.I18n` - translations for 8 languages

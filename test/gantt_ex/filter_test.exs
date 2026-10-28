@@ -127,6 +127,20 @@ defmodule GanttEx.FilterTest do
       assert Filter.active_count(Filter.normalize(%{"status" => ["blocked"]}, defs)) == 1
     end
 
+    test "restores values stored as JSON", %{defs: defs} do
+      stored =
+        %{search: "slab", status: [:blocked], dates: %{from: ~D[2025-01-06], to: nil}, owner: [1]}
+        |> JSON.encode!()
+        |> JSON.decode!()
+
+      assert Filter.normalize(stored, defs) == %{
+               search: "slab",
+               status: [:blocked],
+               dates: %{from: ~D[2025-01-06], to: nil},
+               owner: [1]
+             }
+    end
+
     test "never creates atoms from the client", %{defs: defs} do
       assert Filter.normalize(
                %{"status" => ["no_such_status_atom_#{System.unique_integer()}"]},

@@ -20,7 +20,132 @@ inline editor; other fields are read from `task.meta`.
 
 Slot attributes: `field`, `label`, `width`, `align` (`"left"`, `"center"`,
 `"right"`), `tree`, `editor` (`:text`, `:date`, `:number`, `:progress`,
-`:type` or `nil`) and `sortable`. See `GanttEx.Live.Columns`.
+`:type` or `nil`), `sortable`, `hidden` and `actions`. See
+`GanttEx.Live.Columns`.
+
+## Column chooser and layout
+
+Plans carry more data than fits on screen. Declare every column the user
+may want and mark the optional ones `hidden`: they are listed in the column
+chooser (the "Columns" button of the toolbar) and shown when the user adds
+them. Their content still comes from your slot:
+
+```heex
+<:column field={:wbs} hidden />
+<:column field={:text} tree />
+<:column field={:start_date} />
+<:column field={:cost} label="Cost" align="right" hidden :let={task}>
+  {Money.to_string(task.meta[:cost])}
+</:column>
+<:column field={:company} label="Company" hidden :let={task}>
+  <img src={task.meta[:company_logo]} alt="" class="size-5 rounded" /> {task.meta[:company]}
+</:column>
+```
+
+The chooser shows and hides columns, reorders them by dragging (or with
+the arrow buttons, from the keyboard) and resets them to the slots. Headers
+can also be dragged onto each other; a click still sorts and the edges
+still resize. The tree column is always shown. `column_chooser={false}`
+removes the button.
+
+Every change is reported as a `:columns_changed` event with the layout,
+which can be given back as `column_layout` (see the
+[Persistence](persistence.html) guide):
+
+```elixir
+%{order: ["wbs", "text", "start_date", "cost", "company"], hidden: ["company"],
+  widths: %{"text" => 300}, grid_width: nil}
+```
+
+Fields that are no longer columns are ignored, and new slots are added at
+the end, hidden if their slot says so.
+
+## Filters and search
+
+The toolbar has a search input (task names and WBS codes, ignoring case and
+accents) and a "Filters" button whose badge counts the active filters. The
+panel offers the filters given in `filters`, by default
+`[:search, :status, :type, :dates]`:
+
+- `:status`: not started, in progress, completed, overdue (unfinished
+  after its end or its deadline), critical (while the critical path is
+  shown), blocked and with restrictions
+- `:type`: tasks, projects and milestones
+- `:dates`: tasks overlapping a range of days
+
+Your own filters are maps. They are rendered as comboboxes: the options
+can be searched as you type (by default with more than 8 options), the
+selected ones are chips that can be removed, and each filter can be cleared.
+
+```elixir
+people = for p <- @people, do: %{label: p.name, value: p.id, image: p.avatar_url, hint: p.role}
+companies = for c <- @companies, do: %{label: c.name, value: c.id, image: c.logo_url}
+
+filters = [
+  :search,
+  :status,
+  %{id: :responsible, label: "Responsible", field: :responsible_id,
+    options: [%{label: "Unassigned", value: nil} | people], placeholder: "Search people"},
+  %{id: :company, label: "Company", field: &task_company/1, options: companies},
+  %{id: :resources, label: "Crews", options: Enum.map(@crews, &{&1.name, &1.id})},
+  :dates
+]
+```
+
+`field` is a task field, a `:meta` key or a function of the task; when the
+value is a list (such as `:resources`) any of them can match, and the `nil`
+option matches tasks without value. Values of a filter combine with OR,
+filters combine with AND (and with the `filter` function attribute).
+
+Matching tasks are shown with their ancestors, with "N of M tasks" and the
+active filters above the chart; rows cannot be reordered meanwhile. The
+selection is reported as `:filters_changed` events and can be restored with
+`filter_values`. `filters={false}` removes the search and the panel. The
+logic is in `GanttEx.Filter`, usable on its own.
+
+## Row actions
+
+An `:actions` column shows compact buttons on every row, revealed on hover,
+focus and selection (always on touch screens):
+
+```heex
+<:column field={:actions} actions={[:drag, :rename, :block, :restriction, :detail, :delete]} />
+<:column field={:actions} actions={[:drag, :edit, %{id: :approve, icon: :check, label: "Approve"}]} />
+```
+
+- `:drag` - a grip to drag the row (reorder or re-parent it). With the
+  keyboard, the arrow keys move it among its siblings. It is dimmed, with
+  the reason in its tooltip, while rows are sorted, filtered or grouped.
+- `:rename` - edits the name in place. `:edit` opens the lightbox.
+- `:block` - blocks or unblocks the task, as a normal change: undoable and
+  reported as `:task_updated` with `changes: %{blocked: true}`.
+- `:restriction` and `:detail` - reported as `:task_action` events, for
+  you to open your own dialog or side panel.
+- `:delete` - deletes the task after confirmation.
+- Custom actions (`%{id, icon, label}`, `icon` from
+  `GanttEx.Live.Icons.names/0`) are reported as `:task_action` events too.
+
+Read-only charts and tasks hide the actions that edit; `:detail` and custom
+actions stay. The column is as wide as its actions unless `width` is given.
+
+## Status indicators
+
+Tasks with `blocked: true` show a lock next to their name and a hatched bar;
+tasks with open `restrictions` (a count) show a warning with the count and a
+dot on their bar. Tooltips and the quick info mention both. Rows and bars get
+the `gx-row--blocked`, `gx-row--restricted`, `gx-bar--blocked` and
+`gx-bar--restricted` classes, and the tones are custom properties:
+
+```css
+.gx-root {
+  --gx-danger: #dc2626;        /* blocked */
+  --gx-danger-strong: #b91c1c;
+  --gx-danger-soft: rgba(220, 38, 38, 0.1);
+  --gx-warning: #f59e0b;       /* restrictions */
+  --gx-warning-strong: #b45309;
+  --gx-warning-soft: rgba(245, 158, 11, 0.14);
+}
+```
 
 ## Bars and tooltips
 
@@ -89,8 +214,9 @@ force one. Sizes: `row_height`, `bar_height`, `scale_height`, `height`
 ## Behaviour flags
 
 `readonly`, `lightbox`, `inline_edit`, `quick_info`, `tooltips`, `reorder`,
-`links_editable`, `drag_create`, `toolbar`, `show_grid`, `smart_rendering`
-and `filter`. See `GanttEx.Live.Gantt` for the full list.
+`links_editable`, `drag_create`, `toolbar`, `show_grid`, `smart_rendering`,
+`filter`, `filters` and `column_chooser`. See `GanttEx.Live.Gantt` for the
+full list.
 
 ## Large charts
 

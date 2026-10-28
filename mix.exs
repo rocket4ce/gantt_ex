@@ -93,6 +93,7 @@ defmodule GanttEx.MixProject do
           GanttEx.Task,
           GanttEx.Link,
           GanttEx.Store,
+          GanttEx.Filter,
           GanttEx.Event,
           GanttEx.History,
           GanttEx.Marker,

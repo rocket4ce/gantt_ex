@@ -20,7 +20,11 @@ defmodule GanttEx.Live.Gantt do
   ## Features
 
     * task grid with tree, configurable/sortable/resizable columns and inline editing
-    * tasks, projects (dates rolled up from children) and milestones
+    * a column chooser to show, hide and reorder columns, and draggable headers
+    * search and filters (status, type, dates and your own fields)
+    * row actions: drag handle, rename, block, add a restriction, open, delete...
+    * tasks, projects (dates rolled up from children) and milestones, which can
+      be blocked or have open restrictions
     * drag & drop to move, resize and change progress; drag to reorder rows
     * finish-to-start, start-to-start, finish-to-finish and start-to-finish
       dependencies with lag, drawn by dragging between bar edges
@@ -87,8 +91,32 @@ defmodule GanttEx.Live.Gantt do
       `:auto` (the default) enables it above 120 visible rows; `true` or `false`
       force it.
     * `:filter` - a 1-arity function returning `true` for the tasks to show
-      (their ancestors are shown too).
+      (their ancestors are shown too). Combined with the filters of the toolbar.
     * `:notify` - the pid that receives the events. Defaults to the parent LiveView.
+
+  Filters and columns:
+
+    * `:filters` - the search and filters offered by the toolbar: any of
+      `:search`, `:status`, `:type` and `:dates`, and custom filters given as
+      maps (see `GanttEx.Filter`):
+
+          filters={[:search, :status, %{id: :responsible, label: "Responsible",
+                     field: :responsible_id, options: [{"Unassigned", nil} | @people]}]}
+
+      Defaults to `[:search, :status, :type, :dates]`; `false` or `[]` remove
+      the search and the filter panel. Matching tasks are shown with their
+      ancestors, and rows cannot be reordered while filtering.
+    * `:filter_values` - the selected filters, to restore them:
+      `%{search: "slab", status: [:blocked], responsible: ["uuid-1", nil],
+      dates: %{from: ~D[2025-01-01], to: ~D[2025-01-31]}}`. A different value
+      replaces what the user selected; rendering the same value again keeps
+      it. Changes are reported as `:filters_changed` events.
+    * `:column_chooser` - show the column chooser in the toolbar. Defaults to `true`.
+    * `:column_layout` - the order, hidden columns, widths and grid width set
+      by the user, to restore them: `%{order: ["wbs", "text"], hidden: ["cost"],
+      widths: %{"text" => 300}, grid_width: nil}` (see `GanttEx.Live.Columns`).
+      Same rule as `:filter_values`; changes are reported as
+      `:columns_changed` events.
 
   Time scale:
 
@@ -121,21 +149,32 @@ defmodule GanttEx.Live.Gantt do
   ## Slots
 
     * `:column` - grid columns. Attributes: `field` (required: `:text`,
-      `:start_date`, `:end_date`, `:duration`, `:progress`, `:type`, `:add` or
-      any key of the task `:meta`), `label`, `width`, `align`, `tree`
-      (shows the tree in this column), `editor` (`:text`, `:date`, `:number`,
-      `:progress`, `:type` or `nil`) and `sortable`. The inner block receives
-      the task:
+      `:start_date`, `:end_date`, `:duration`, `:progress`, `:type`, `:wbs`,
+      `:add`, `:actions` or any key of the task `:meta`), `label`, `width`,
+      `align`, `tree` (shows the tree in this column), `editor` (`:text`,
+      `:date`, `:number`, `:progress`, `:type` or `nil`), `sortable`, `hidden`
+      (available in the column chooser but not shown until the user adds it)
+      and `actions` (the buttons of an `:actions` column, see
+      `GanttEx.Live.Columns`). The inner block receives the task:
 
           <:column field={:owner} label="Owner" width={120} :let={task}>
             {task.meta[:owner]}
           </:column>
+          <:column field={:cost} label="Cost" hidden :let={task}>{task.meta[:cost]}</:column>
+          <:column field={:actions} actions={[:drag, :rename, :block, :restriction, :detail]} />
 
     * `:task_text` - content of the bars, receives the task.
     * `:tooltip` - content of the tooltips, receives the task.
     * `:lightbox_fields` - extra lightbox fields, receives the form. Values
       are stored in the task `:meta`.
     * `:toolbar_actions` - extra content for the toolbar.
+
+  ## Events
+
+  Besides the changes of the data, the parent receives `:task_selected`,
+  `:branch_requested`, `:task_action` (a row action it handles, such as
+  `:restriction` or `:detail`), `:filters_changed` and `:columns_changed`
+  events. See `GanttEx.Event`.
 
   ## Controlling the chart from the parent
 
