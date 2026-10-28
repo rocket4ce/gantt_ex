@@ -660,7 +660,8 @@ defmodule GanttEx.Live.Gantt do
     {first, last} =
       if smart_rendering?(a.smart_rendering, count) do
         %{top: top, height: height} = a.viewport
-        first = max(div(trunc(top), a.row_height) - @window_buffer, 0)
+        # rows may be fewer than the scrolled position (filtered, or new data)
+        first = min(max(div(trunc(top), a.row_height) - @window_buffer, 0), count - 1)
         last = min(div(trunc(top + height), a.row_height) + @window_buffer, count - 1)
         {first, max(last, first)}
       else
@@ -1890,7 +1891,10 @@ defmodule GanttEx.Live.Gantt do
           socket
 
         {"__grid", width} ->
-          put_columns(socket, %{a.column_state | grid_width: width})
+          put_columns(socket, %{
+            a.column_state
+            | grid_width: width |> round() |> max(120) |> min(2000)
+          })
 
         {field, width} ->
           case Enum.find(a.columns, &(&1.key == field and not &1.tree)) do

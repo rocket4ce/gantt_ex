@@ -133,8 +133,12 @@ defmodule GanttEx.Live.ColumnChooserTest do
     assert render(view) =~ "--gx-col-3: 180px"
     assert_gantt_event(%Event{columns: %{widths: %{"owner" => 180}, grid_width: nil}})
 
-    view |> element("#gantt") |> render_hook("gx:resize", %{"column" => "__grid", "width" => 640})
+    view
+    |> element("#gantt")
+    |> render_hook("gx:resize", %{"column" => "__grid", "width" => 640.4})
+
     assert_gantt_event(%Event{columns: %{widths: %{"owner" => 180}, grid_width: 640}})
+    assert render(view) =~ "--gx-grid-width: 640px"
   end
 
   test "reset restores the columns of the slots", %{conn: conn} do

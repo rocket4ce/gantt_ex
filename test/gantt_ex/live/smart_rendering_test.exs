@@ -67,6 +67,20 @@ defmodule GanttEx.Live.SmartRenderingTest do
     assert_push_event(view, "gantt_ex:scroll", %{y: 17964})
   end
 
+  test "the window stays within the rows when they shrink", %{conn: conn} do
+    tasks = for task <- many_tasks(500), do: Map.put(task, :blocked, task.id > 300)
+    {:ok, view, _html} = mount_gantt(conn, tasks: tasks, links: [])
+
+    view |> element("#gantt") |> render_hook("gx:viewport", %{"top" => 14_400, "height" => 720})
+    assert has_element?(view, "#gantt[data-gx-window='375:445:500']")
+
+    # the parent restores filters leaving 200 rows: the rendered rows end with them
+    send(view.pid, {:assign, opts: %{filter_values: %{status: [:blocked]}}})
+    assert has_element?(view, "#gantt[data-gx-window='199:199:200']")
+    assert has_element?(view, "#gantt-row-500")
+    assert has_element?(view, ".gx-spacer[style='height: #{199 * 36}px']")
+  end
+
   test "invalid viewports are ignored", %{conn: conn} do
     {:ok, view, _html} = mount_gantt(conn, tasks: many_tasks(500), links: [])
 
