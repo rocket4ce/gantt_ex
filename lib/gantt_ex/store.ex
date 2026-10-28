@@ -1094,6 +1094,63 @@ defmodule GanttEx.Store do
   end
 
   @doc """
+  Replaces existing tasks with new data, as `new/3` would read it, without
+  rebuilding the store: the cheap way to apply the changes made elsewhere
+  (another user, another tab) to a large chart. The parent projects of the
+  replaced tasks get their dates rolled up again.
+
+  The tasks must already be in the store and keep their parent; otherwise
+  it returns `{:error, :structure_changed}` and the store has to be built
+  again with `new/3`.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, type: :project}, %{id: 2, parent: 1, start_date: ~D[2025-01-06], duration: 2}])
+      iex> {:ok, store} = GanttEx.Store.put_tasks(store, [%{id: 2, parent: 1, start_date: ~D[2025-01-08], duration: 3, progress: 0.5}])
+      iex> {GanttEx.Store.get_task(store, 2).progress, GanttEx.Store.get_task(store, 1).end_date}
+      {0.5, ~N[2025-01-11 00:00:00]}
+      iex> GanttEx.Store.put_tasks(store, [%{id: 2, start_date: ~D[2025-01-08]}])
+      {:error, :structure_changed}
+  """
+  @spec put_tasks(t(), [term()]) :: {:ok, t()} | {:error, error() | :structure_changed}
+  def put_tasks(%__MODULE__{} = store, items) do
+    with {:ok, tasks} <- cast_all(items, &Task.new/1, :task),
+         {:ok, tasks} <- schedule_all(tasks, store),
+         :ok <- same_places(store, tasks) do
+      ids = Enum.map(tasks, & &1.id)
+
+      store =
+        Enum.reduce(
+          tasks,
+          store,
+          &put_in(&2.tasks[&1.id], %{&1 | parent: resolve_parent(&2, &1)})
+        )
+
+      {store, _changes} = retype(store, ids)
+      {store, _changes} = rollup(store, ids)
+
+      case Enum.find(tasks, &is_nil(&1.start_date)) do
+        nil -> {:ok, store}
+        task -> {:error, {:invalid_task, task.id, {:missing, :start_date}}}
+      end
+    end
+  end
+
+  # Every task is known and keeps its parent (as `new/3` resolves it)
+  defp same_places(store, tasks) do
+    if Enum.all?(tasks, fn task ->
+         case Map.fetch(store.tasks, task.id) do
+           {:ok, old} -> old.parent == resolve_parent(store, task)
+           :error -> false
+         end
+       end),
+       do: :ok,
+       else: {:error, :structure_changed}
+  end
+
+  defp resolve_parent(store, task) do
+    if task.parent != task.id and Map.has_key?(store.tasks, task.parent), do: task.parent
+  end
+
+  @doc """
   Deletes a task with all its descendants and every link attached to them.
 
   Changes are reported links first, then tasks from the deepest descendant up

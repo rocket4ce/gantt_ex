@@ -402,16 +402,54 @@ defmodule GanttEx.Live.Gantt do
 
     source = {tasks, links, store_opts}
 
-    if source == socket.assigns.data_source do
-      socket
-    else
-      store = Store.new!(tasks, links, store_opts)
+    cond do
+      source == socket.assigns.data_source ->
+        socket
 
-      socket
-      |> sync_ui_state(socket.assigns.store, store)
-      |> assign(store: store, data_source: source)
+      store = patch_store(socket.assigns, tasks, links, store_opts) ->
+        assign(socket, store: store, data_source: source)
+
+      true ->
+        store = Store.new!(tasks, links, store_opts)
+
+        socket
+        |> sync_ui_state(socket.assigns.store, store)
+        |> assign(store: store, data_source: source)
     end
   end
+
+  # New data that only changes some tasks (same tasks in the same order, same
+  # links and options) updates those tasks in the store: a chart of thousands
+  # of tasks gets the changes of other users without being built again.
+  defp patch_store(
+         %{store: %Store{} = store, data_source: {old, links, opts}},
+         tasks,
+         links,
+         opts
+       ) do
+    with {:ok, changed} <- changed_tasks(old, tasks, []),
+         {:ok, store} <- Store.put_tasks(store, changed) do
+      store
+    else
+      _ -> nil
+    end
+  end
+
+  defp patch_store(_assigns, _tasks, _links, _opts), do: nil
+
+  defp changed_tasks([same | old], [same | new], acc), do: changed_tasks(old, new, acc)
+
+  defp changed_tasks([previous | old], [task | new], acc) do
+    if task_id(previous) == task_id(task),
+      do: changed_tasks(old, new, [task | acc]),
+      else: :error
+  end
+
+  defp changed_tasks([], [], acc), do: {:ok, Enum.reverse(acc)}
+  defp changed_tasks(_old, _new, _acc), do: :error
+
+  defp task_id(task) when is_list(task), do: Keyword.get(task, :id)
+  defp task_id(task) when is_map(task), do: Map.get(task, :id, Map.get(task, "id"))
 
   # Keeps the UI state that still makes sense after new data arrives.
   defp sync_ui_state(socket, old_store, store) do
