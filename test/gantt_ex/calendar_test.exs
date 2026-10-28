@@ -89,4 +89,23 @@ defmodule GanttEx.CalendarTest do
     assert {task.start_date, task.end_date, task.duration} ==
              {~N[2025-01-09 00:00:00], ~N[2025-01-16 00:00:00], 5}
   end
+
+  test "long durations skip whole weeks, but not the exceptions inside them" do
+    calendar = Calendar.new!(holidays: [~D[2025-03-03]], working_dates: [~D[2025-03-15]])
+    start = ~N[2025-01-06 00:00:00]
+
+    # 60 working days from Monday Jan 6 are 12 weeks (the last day is Friday
+    # Mar 28): the Saturday worked and the holiday cancel out
+    assert Calendar.add(calendar, start, 60, :day) == ~N[2025-03-29 00:00:00]
+    assert Calendar.diff(calendar, start, ~N[2025-03-29 00:00:00], :day) == 60
+    assert Calendar.add(calendar, ~N[2025-03-29 00:00:00], -60, :day) == start
+
+    # without exceptions, the same 60 days end at the same place
+    plain = Calendar.new!()
+    assert Calendar.add(plain, start, 60, :day) == ~N[2025-03-29 00:00:00]
+
+    # a struct built by hand works too
+    hand_made = %Calendar{dates: %{~D[2025-01-07] => []}}
+    assert Calendar.add(hand_made, start, 2, :day) == ~N[2025-01-09 00:00:00]
+  end
 end

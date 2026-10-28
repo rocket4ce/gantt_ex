@@ -36,13 +36,18 @@ defmodule GanttEx.Calendar do
   defstruct id: "global",
             work_days: [1, 2, 3, 4, 5],
             hours: [{480, 720}, {780, 1020}],
-            dates: %{}
+            dates: %{},
+            index: nil
 
+  # `index` is derived from `dates` by `new/1`: the exceptions by day number
+  # (`Date.to_gregorian_days/1`) and those numbers sorted, so the arithmetic
+  # works on integers instead of dates.
   @type t :: %__MODULE__{
           id: term(),
           work_days: [1..7],
           hours: [range()],
-          dates: %{Date.t() => [range()]}
+          dates: %{Date.t() => [range()]},
+          index: {%{integer() => [range()]}, tuple()} | nil
         }
 
   # Long tasks are walked day by day; this bounds the walk for safety.
@@ -73,7 +78,7 @@ defmodule GanttEx.Calendar do
       {:error, {:invalid, :hours}}
   """
   @spec new(keyword() | map() | t()) :: {:ok, t()} | {:error, {:invalid, atom()}}
-  def new(%__MODULE__{} = calendar), do: {:ok, calendar}
+  def new(%__MODULE__{} = calendar), do: {:ok, index(calendar)}
   def new(opts) when is_map(opts), do: opts |> Map.to_list() |> new()
 
   def new(opts) when is_list(opts) do
@@ -86,14 +91,26 @@ defmodule GanttEx.Calendar do
       dates = holidays |> Map.new(&{&1, []}) |> Map.merge(working)
 
       {:ok,
-       %__MODULE__{
+       index(%__MODULE__{
          id: Keyword.get(opts, :id, "global"),
          work_days: work_days,
          hours: hours,
          dates: dates
-       }}
+       })}
     end
   end
+
+  defp index(%__MODULE__{dates: dates} = calendar) do
+    days = Map.new(dates, fn {date, hours} -> {Date.to_gregorian_days(date), hours} end)
+    %{calendar | index: {days, days |> Map.keys() |> Enum.sort() |> List.to_tuple()}}
+  end
+
+  # Calendars built as structs get their index on first use
+  defp indexed(%__MODULE__{dates: dates, index: {days, _sorted}} = calendar)
+       when map_size(days) == map_size(dates),
+       do: calendar
+
+  defp indexed(calendar), do: index(calendar)
 
   @doc "Like `new/1` but raises `ArgumentError`."
   @spec new!(keyword() | map() | t()) :: t()
@@ -279,17 +296,18 @@ defmodule GanttEx.Calendar do
   """
   @spec next_working(t(), NaiveDateTime.t(), Dates.unit()) :: NaiveDateTime.t()
   def next_working(calendar, datetime, unit) when unit in [:hour, :minute] do
-    if working_time?(calendar, datetime), do: datetime, else: walk_forward(calendar, datetime, 0)
+    if working_time?(calendar, datetime),
+      do: datetime,
+      else: calendar |> indexed() |> walk_forward(datetime, 0)
   end
 
   def next_working(calendar, datetime, :day) do
-    date = NaiveDateTime.to_date(datetime)
+    calendar = indexed(calendar)
+    day = day_number(datetime)
 
-    if working_day?(calendar, date) do
-      datetime
-    else
-      calendar |> next_working_date(Date.add(date, 1)) |> at_midnight()
-    end
+    if hours_on(calendar, day) != [],
+      do: datetime,
+      else: calendar |> nth_working_day(day + 1, 1, 1) |> at_midnight()
   end
 
   def next_working(_calendar, datetime, _unit), do: datetime
@@ -314,18 +332,22 @@ defmodule GanttEx.Calendar do
   def add(_calendar, datetime, amount, _unit) when amount == 0, do: datetime
 
   def add(calendar, datetime, amount, :day) when amount > 0 do
-    date = NaiveDateTime.to_date(datetime)
-    calendar |> nth_working_date(date, round(amount), 1) |> Date.add(1) |> at_midnight()
+    calendar
+    |> indexed()
+    |> nth_working_day(day_number(datetime), round(amount), 1)
+    |> Kernel.+(1)
+    |> at_midnight()
   end
 
   def add(calendar, datetime, amount, :day) do
     # the last day before `datetime`, walking backwards
-    date = datetime |> Dates.add(-1, :minute) |> NaiveDateTime.to_date()
-    calendar |> nth_working_date(date, round(-amount), -1) |> at_midnight()
+    last = datetime |> Dates.add(-1, :minute) |> day_number()
+    calendar |> indexed() |> nth_working_day(last, round(-amount), -1) |> at_midnight()
   end
 
   def add(calendar, datetime, amount, unit) when unit in [:hour, :minute] do
     minutes = round(amount * if(unit == :hour, do: 60, else: 1))
+    calendar = indexed(calendar)
 
     if minutes > 0,
       do: walk_forward(calendar, datetime, minutes),
@@ -350,27 +372,26 @@ defmodule GanttEx.Calendar do
     case NaiveDateTime.compare(to, from) do
       :lt -> -diff(calendar, to, from, unit)
       :eq -> 0
-      :gt -> do_diff(calendar, from, to, unit)
+      :gt -> calendar |> indexed() |> do_diff(from, to, unit)
     end
   end
 
   defp do_diff(calendar, from, to, :day) do
-    first = NaiveDateTime.to_date(from)
     # a day counts when the range reaches into it
-    last = to |> NaiveDateTime.add(-1, :second) |> NaiveDateTime.to_date()
-    sum_dates(calendar, first, last, &if(&1 == [], do: 0, else: 1))
+    last = to |> NaiveDateTime.add(-1, :second) |> day_number()
+    sum_days(calendar, day_number(from), last, &if(&1 == [], do: 0, else: 1))
   end
 
   defp do_diff(calendar, from, to, unit) when unit in [:hour, :minute] do
-    first = NaiveDateTime.to_date(from)
-    last = NaiveDateTime.to_date(to)
+    first = day_number(from)
+    last = day_number(to)
 
     minutes =
       if first == last do
         clipped_minutes(calendar, first, minute_of_day(from), minute_of_day(to))
       else
         clipped_minutes(calendar, first, minute_of_day(from), 1440) +
-          sum_dates(calendar, Date.add(first, 1), Date.add(last, -1), &hours_minutes/1) +
+          sum_days(calendar, first + 1, last - 1, &hours_minutes/1) +
           clipped_minutes(calendar, last, 0, minute_of_day(to))
       end
 
@@ -397,31 +418,29 @@ defmodule GanttEx.Calendar do
     end
   end
 
-  # Sums `value.(hours)` over the working periods of the dates from `first`
-  # to `last`. Long ranges count whole weeks at once and then correct the
-  # dates with exceptions, instead of visiting every date.
-  defp sum_dates(calendar, first, last, value) do
-    days = Date.diff(last, first) + 1
+  # Sums `value.(hours)` over the working periods of the days from `first`
+  # to `last` (day numbers). Long ranges count whole weeks at once and then
+  # correct the days with exceptions, instead of visiting every day.
+  defp sum_days(_calendar, first, last, _value) when last < first, do: 0
 
-    if days <= 7 + map_size(calendar.dates) do
-      first
-      |> Date.range(last, 1)
-      |> Enum.reduce(0, &(value.(hours_for(calendar, &1)) + &2))
-    else
-      weekly = &value.(weekday_hours(calendar, &1))
-      # ISO day of the week of `first`, from 0 (Monday) to 6
-      offset = Date.day_of_week(first) - 1
-      week = Enum.sum_by(1..7, weekly)
-      rest = Enum.sum_by(0..(rem(days, 7) - 1)//1, &weekly.(rem(offset + &1, 7) + 1))
+  defp sum_days(calendar, first, last, value) when last - first < 14 do
+    Enum.reduce(first..last, 0, &(value.(hours_on(calendar, &1)) + &2))
+  end
 
-      exceptions =
-        for {date, hours} <- calendar.dates,
-            Date.compare(date, first) != :lt and Date.compare(date, last) != :gt,
-            reduce: 0,
-            do: (acc -> acc + value.(hours) - weekly.(Date.day_of_week(date)))
+  defp sum_days(%{index: {days, sorted}} = calendar, first, last, value) do
+    total = last - first + 1
+    weekly = &value.(weekday_hours(calendar, &1))
+    # ISO day of the week of `first`, from 0 (Monday) to 6
+    offset = weekday(first) - 1
+    week = Enum.sum_by(1..7, weekly)
+    rest = Enum.sum_by(0..(rem(total, 7) - 1)//1, &weekly.(rem(offset + &1, 7) + 1))
 
-      div(days, 7) * week + rest + exceptions
-    end
+    exceptions =
+      sorted
+      |> exceptions_from(first_at_least(sorted, first), last)
+      |> Enum.reduce(0, &(&2 + value.(Map.fetch!(days, &1)) - weekly.(weekday(&1))))
+
+    div(total, 7) * week + rest + exceptions
   end
 
   # The hours of an ISO day of the week, ignoring the exceptions of the calendar.
@@ -430,43 +449,93 @@ defmodule GanttEx.Calendar do
 
   defp hours_minutes(hours), do: Enum.sum_by(hours, fn {from, to} -> to - from end)
 
-  # The working minutes of `date` between the minutes `low` and `high`.
-  defp clipped_minutes(calendar, date, low, high) do
+  # The working minutes of `day` between the minutes `low` and `high`.
+  defp clipped_minutes(calendar, day, low, high) do
     calendar
-    |> hours_for(date)
+    |> hours_on(day)
     |> Enum.sum_by(fn {a, b} -> max(min(b, high) - max(a, low), 0) end)
+  end
+
+  # -- day numbers -------------------------------------------------------------
+
+  defp day_number(%NaiveDateTime{} = datetime),
+    do: datetime |> NaiveDateTime.to_date() |> Date.to_gregorian_days()
+
+  # ISO day of the week (1 = Monday): day 0 (0000-01-01) is a Saturday
+  defp weekday(day), do: rem(day + 5, 7) + 1
+
+  defp hours_on(%{index: {days, _sorted}} = calendar, day) do
+    case days do
+      %{^day => hours} -> hours
+      _ -> weekday_hours(calendar, weekday(day))
+    end
+  end
+
+  # Position of the first exception on `day` or later (binary search)
+  defp first_at_least(sorted, day), do: first_at_least(sorted, day, 0, tuple_size(sorted))
+
+  defp first_at_least(_sorted, _day, low, high) when low >= high, do: low
+
+  defp first_at_least(sorted, day, low, high) do
+    middle = div(low + high, 2)
+
+    if elem(sorted, middle) < day,
+      do: first_at_least(sorted, day, middle + 1, high),
+      else: first_at_least(sorted, day, low, middle)
+  end
+
+  defp exceptions_from(sorted, position, last) do
+    if position < tuple_size(sorted) and elem(sorted, position) <= last,
+      do: [elem(sorted, position) | exceptions_from(sorted, position + 1, last)],
+      else: []
+  end
+
+  defp exception_between?(%{index: {_days, sorted}}, first, last) do
+    position = first_at_least(sorted, first)
+    position < tuple_size(sorted) and elem(sorted, position) <= last
   end
 
   # -- walking -----------------------------------------------------------------
 
-  defp nth_working_date(calendar, date, n, step), do: nth_working_date(calendar, date, n, step, 0)
+  # The `n`th working day from `day` (included), walking by `step` (1 or -1).
+  # Whole weeks without exceptions are skipped at once: any 7 days hold every
+  # working day of the week once.
+  defp nth_working_day(calendar, day, n, step), do: nth_working_day(calendar, day, n, step, 0)
 
-  defp nth_working_date(_calendar, date, _n, _step, guard) when guard > @max_days, do: date
+  defp nth_working_day(_calendar, day, _n, _step, guard) when guard > @max_days, do: day
 
-  defp nth_working_date(calendar, date, n, step, guard) do
-    if working_day?(calendar, date) do
-      if n <= 1,
-        do: date,
-        else: nth_working_date(calendar, Date.add(date, step), n - 1, step, guard + 1)
-    else
-      nth_working_date(calendar, Date.add(date, step), n, step, guard + 1)
+  defp nth_working_day(calendar, day, n, step, guard) do
+    per_week = if calendar.hours == [], do: 0, else: length(calendar.work_days)
+    weeks = if per_week > 0, do: div(n - 1, per_week), else: 0
+    skipped = day + step * (weeks * 7 - 1)
+
+    cond do
+      weeks > 0 and not exception_between?(calendar, min(day, skipped), max(day, skipped)) ->
+        nth_working_day(calendar, skipped + step, n - weeks * per_week, step, guard + weeks * 7)
+
+      hours_on(calendar, day) == [] ->
+        nth_working_day(calendar, day + step, n, step, guard + 1)
+
+      n <= 1 ->
+        day
+
+      true ->
+        nth_working_day(calendar, day + step, n - 1, step, guard + 1)
     end
   end
 
-  defp next_working_date(calendar, date), do: nth_working_date(calendar, date, 1, 1)
-
   # Consumes `minutes` of working time from `datetime` forward. With 0 minutes
   # it returns the next working minute.
-  defp walk_forward(calendar, datetime, minutes, guard \\ 0)
-  defp walk_forward(_calendar, datetime, _minutes, guard) when guard > @max_days, do: datetime
+  defp walk_forward(calendar, datetime, minutes),
+    do: walk_forward(calendar, day_number(datetime), minute_of_day(datetime), minutes, 0)
 
-  defp walk_forward(calendar, datetime, minutes, guard) do
-    date = NaiveDateTime.to_date(datetime)
-    minute = minute_of_day(datetime)
+  defp walk_forward(_calendar, day, minute, _minutes, guard) when guard > @max_days,
+    do: at_minute(day, minute)
 
+  defp walk_forward(calendar, day, minute, minutes, guard) do
     result =
       calendar
-      |> hours_for(date)
+      |> hours_on(day)
       |> Enum.reduce_while(minutes, fn {from, to}, left ->
         start = max(from, minute)
 
@@ -479,24 +548,25 @@ defmodule GanttEx.Calendar do
       end)
 
     case result do
-      {:at, minute} -> at_minute(date, minute)
-      left -> walk_forward(calendar, at_midnight(Date.add(date, 1)), left, guard + 1)
+      {:at, minute} -> at_minute(day, minute)
+      left -> walk_forward(calendar, day + 1, 0, left, guard + 1)
     end
   end
 
-  defp walk_backward(calendar, datetime, minutes, guard \\ 0)
-  defp walk_backward(_calendar, datetime, _minutes, guard) when guard > @max_days, do: datetime
+  defp walk_backward(calendar, datetime, minutes) do
+    case minute_of_day(datetime) do
+      0 -> walk_backward(calendar, day_number(datetime) - 1, 1440, minutes, 0)
+      minute -> walk_backward(calendar, day_number(datetime), minute, minutes, 0)
+    end
+  end
 
-  defp walk_backward(calendar, datetime, minutes, guard) do
-    {date, minute} =
-      case minute_of_day(datetime) do
-        0 -> {Date.add(NaiveDateTime.to_date(datetime), -1), 1440}
-        minute -> {NaiveDateTime.to_date(datetime), minute}
-      end
+  defp walk_backward(_calendar, day, minute, _minutes, guard) when guard > @max_days,
+    do: at_minute(day, minute)
 
+  defp walk_backward(calendar, day, minute, minutes, guard) do
     result =
       calendar
-      |> hours_for(date)
+      |> hours_on(day)
       |> Enum.reverse()
       |> Enum.reduce_while(minutes, fn {from, to}, left ->
         finish = min(to, minute)
@@ -509,17 +579,21 @@ defmodule GanttEx.Calendar do
       end)
 
     case result do
-      {:at, minute} -> at_minute(date, minute)
-      left -> walk_backward(calendar, at_midnight(date), left, guard + 1)
+      {:at, minute} -> at_minute(day, minute)
+      left -> walk_backward(calendar, day - 1, 1440, left, guard + 1)
     end
   end
 
   defp minute_of_day(%NaiveDateTime{hour: h, minute: m}), do: h * 60 + m
 
-  defp at_midnight(%Date{} = date), do: NaiveDateTime.new!(date, ~T[00:00:00])
+  defp at_midnight(day), do: NaiveDateTime.new!(Date.from_gregorian_days(day), ~T[00:00:00])
 
-  defp at_minute(date, 1440), do: at_midnight(Date.add(date, 1))
+  defp at_minute(day, 1440), do: at_midnight(day + 1)
 
-  defp at_minute(date, minute),
-    do: NaiveDateTime.new!(date, Time.new!(div(minute, 60), rem(minute, 60), 0))
+  defp at_minute(day, minute) do
+    NaiveDateTime.new!(
+      Date.from_gregorian_days(day),
+      Time.new!(div(minute, 60), rem(minute, 60), 0)
+    )
+  end
 end
