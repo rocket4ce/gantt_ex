@@ -935,15 +935,17 @@ defmodule GanttEx.Store do
       %{1 => "1", 2 => "1.1", 3 => "1.2", 4 => "2"}
   """
   @spec wbs_codes(t()) :: %{Task.id() => String.t()}
-  def wbs_codes(%__MODULE__{} = store), do: wbs_codes(store, nil, "")
+  def wbs_codes(%__MODULE__{} = store), do: wbs_codes(store, nil, "", %{})
 
-  defp wbs_codes(store, parent, prefix) do
+  # One map for the whole walk: merging the maps of every branch is quadratic
+  # in the number of children of a summary task
+  defp wbs_codes(store, parent, prefix, acc) do
     store
     |> child_ids(parent)
     |> Enum.with_index(1)
-    |> Enum.reduce(%{}, fn {id, index}, acc ->
+    |> Enum.reduce(acc, fn {id, index}, acc ->
       code = prefix <> Integer.to_string(index)
-      acc |> Map.put(id, code) |> Map.merge(wbs_codes(store, id, code <> "."))
+      wbs_codes(store, id, code <> ".", Map.put(acc, id, code))
     end)
   end
 
