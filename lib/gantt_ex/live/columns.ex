@@ -15,10 +15,36 @@ defmodule GanttEx.Live.Columns do
   | `:type`       | Type          | `:type`     |
   | `:wbs`        | WBS           | none        |
   | `:add`        | (add button)  | none        |
+  | `:actions`    | (row actions) | none        |
 
   Any other field is read from the task `:meta` and is not editable unless an
   `editor` is given. The tree is shown in the column marked with `tree`, or
   in the `:text` column.
+
+  ## Row actions
+
+  The `:actions` column shows compact buttons on every row, given in its
+  `actions` attribute (`#{inspect([:drag, :edit, :delete])}` by default):
+
+    * `:drag` - a handle to drag the row (reorder or re-parent it), also
+      moved with the arrow keys
+    * `:rename` - edits the task name in place
+    * `:edit` - opens the lightbox
+    * `:block` - blocks or unblocks the task
+    * `:restriction` - asks the host to add a restriction (a `:task_action` event)
+    * `:detail` - asks the host to open the task (a `:task_action` event)
+    * `:delete` - deletes the task, after confirmation
+    * `%{id: :approve, icon: :check, label: "Approve"}` - a custom action,
+      reported as a `:task_action` event. `icon` is one of
+      `GanttEx.Live.Icons.names/0`.
+
+  Read-only charts drop the actions that edit (all of them but `:detail`
+  and the custom ones). The column is as wide as its actions.
+
+      iex> labels = GanttEx.I18n.labels("en")
+      iex> [column] = GanttEx.Live.Columns.build([%{field: :actions, actions: [:drag, :detail, %{id: :pin, icon: :bolt, label: "Pin"}]}], labels, readonly: true)
+      iex> {Enum.map(column.actions, &{&1.id, &1.label}), column.width}
+      {[detail: "Open detail", pin: "Pin"], 66}
 
       iex> labels = GanttEx.I18n.labels("en")
       iex> columns = GanttEx.Live.Columns.build([], labels)
@@ -30,7 +56,20 @@ defmodule GanttEx.Live.Columns do
   """
 
   # computed or multi-valued fields
-  @unsortable [:add, :wbs, :total_slack, :free_slack, :resources]
+  @unsortable [:add, :actions, :wbs, :total_slack, :free_slack, :resources]
+
+  @default_actions [:drag, :edit, :delete]
+
+  # built-in row actions: their icon and whether they edit the task
+  @actions %{
+    drag: {:grip, true},
+    rename: {:pencil, true},
+    edit: {:pencil_square, true},
+    block: {:lock_open, true},
+    restriction: {:triangle_plus, true},
+    detail: {:arrow_top_right_on_square, false},
+    delete: {:trash, true}
+  }
 
   @defaults [
     %{field: :text, tree: true, width: 220},
@@ -70,21 +109,30 @@ defmodule GanttEx.Live.Columns do
         do: Enum.reject(slots, &(&1.field == :add)),
         else: slots
 
+    readonly = Keyword.get(opts, :readonly, false)
+
     columns =
-      Enum.map(slots, fn slot ->
+      slots
+      |> Enum.map(fn slot ->
         field = Map.fetch!(slot, :field)
+        actions = if field == :actions, do: actions(slot, labels, readonly), else: []
 
         Map.merge(slot, %{
           field: field,
           label: Map.get(slot, :label) || label(field, labels),
-          width: Map.get(widths, to_string(field)) || Map.get(slot, :width) || width(field),
+          width:
+            Map.get(widths, to_string(field)) || Map.get(slot, :width) ||
+              width(field, length(actions)),
           align: Map.get(slot, :align) || align(field),
           tree: Map.get(slot, :tree, false),
           editor: Map.get(slot, :editor, editor(field)),
           sortable: Map.get(slot, :sortable, field not in @unsortable),
-          inner_block: Map.get(slot, :inner_block)
+          inner_block: Map.get(slot, :inner_block),
+          actions: actions
         })
       end)
+      # read-only charts may have no action left
+      |> Enum.reject(&(&1.field == :actions and &1.actions == []))
 
     if Enum.any?(columns, & &1.tree) do
       columns
@@ -93,6 +141,61 @@ defmodule GanttEx.Live.Columns do
       List.update_at(columns, index, &%{&1 | tree: true})
     end
   end
+
+  @doc """
+  Returns the width of an `:actions` column with `count` actions.
+
+      iex> GanttEx.Live.Columns.actions_width(3)
+      92
+  """
+  @spec actions_width(non_neg_integer()) :: pos_integer()
+  def actions_width(count), do: 14 + 26 * max(count, 1)
+
+  defp actions(slot, labels, readonly) do
+    slot
+    |> Map.get(:actions, @default_actions)
+    |> List.wrap()
+    |> Enum.map(&action(&1, labels))
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.reject(&(readonly and &1.editing))
+  end
+
+  defp action(id, labels) when is_map_key(@actions, id) do
+    {icon, editing} = Map.fetch!(@actions, id)
+    %{id: id, icon: icon, label: action_label(id, labels), editing: editing, builtin: true}
+  end
+
+  defp action(%{id: id} = action, _labels) when is_atom(id) or is_binary(id) do
+    icon = Map.get(action, :icon, :bolt)
+
+    if icon not in GanttEx.Live.Icons.names() do
+      raise ArgumentError,
+            "unknown icon #{inspect(icon)} for the action #{inspect(id)}, " <>
+              "expected one of GanttEx.Live.Icons.names/0"
+    end
+
+    %{
+      id: id,
+      icon: icon,
+      label: to_string(Map.get(action, :label) || id),
+      editing: false,
+      builtin: false
+    }
+  end
+
+  defp action(other, _labels) do
+    raise ArgumentError,
+          "invalid row action #{inspect(other)}: expected one of " <>
+            "#{inspect(Map.keys(@actions))} or a map with an :id, an :icon and a :label"
+  end
+
+  defp action_label(:drag, labels), do: labels.drag_to_reorder
+  defp action_label(:rename, labels), do: labels.rename
+  defp action_label(:edit, labels), do: labels.edit
+  defp action_label(:block, labels), do: labels.block_task
+  defp action_label(:restriction, labels), do: labels.add_restriction
+  defp action_label(:detail, labels), do: labels.open_detail
+  defp action_label(:delete, labels), do: labels.delete
 
   @doc "Returns the sum of the column widths."
   @spec total_width([t()]) :: non_neg_integer()
@@ -117,18 +220,20 @@ defmodule GanttEx.Live.Columns do
   defp label(:deadline, labels), do: labels.deadline
   defp label(:free_slack, labels), do: labels.free_slack
   defp label(:add, _labels), do: ""
+  defp label(:actions, labels), do: labels.actions
 
   defp label(field, _labels),
     do: field |> to_string() |> String.replace("_", " ") |> String.capitalize()
 
-  defp width(:text), do: 220
-  defp width(:add), do: 44
-  defp width(:wbs), do: 64
-  defp width(:resources), do: 140
-  defp width(:constraint_type), do: 150
-  defp width(field) when field in [:duration, :progress], do: 76
-  defp width(field) when field in [:total_slack, :free_slack], do: 96
-  defp width(_field), do: 104
+  defp width(:actions, count), do: actions_width(count)
+  defp width(:text, _count), do: 220
+  defp width(:add, _count), do: 44
+  defp width(:wbs, _count), do: 64
+  defp width(:resources, _count), do: 140
+  defp width(:constraint_type, _count), do: 150
+  defp width(field, _count) when field in [:duration, :progress], do: 76
+  defp width(field, _count) when field in [:total_slack, :free_slack], do: 96
+  defp width(_field, _count), do: 104
 
   defp align(field)
        when field in [

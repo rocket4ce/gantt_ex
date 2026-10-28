@@ -17,6 +17,8 @@ defmodule GanttEx.Live.Components do
     * `:date_pattern` - the pattern used for dates in the grid
     * `:unit` - the duration unit
     * `:readonly`, `:inline_edit`, `:tooltips`, `:lightbox` - feature flags
+    * `:reorder` - whether rows can be dragged: `:ok`, or why not
+      (`:sorted`, `:filtered` or `:disabled`)
   """
 
   use Phoenix.Component
@@ -723,6 +725,8 @@ defmodule GanttEx.Live.Components do
         aria-sort={aria_sort(@sort, col)}
       >
         <%= cond do %>
+          <% col.field == :actions -> %>
+            <span class="gx-sr-only">{col.label}</span>
           <% col.field == :add -> %>
             <button
               :if={not @ctx.readonly}
@@ -884,6 +888,20 @@ defmodule GanttEx.Live.Components do
     """
   end
 
+  defp cell_content(%{column: %{field: :actions}} = assigns) do
+    ~H"""
+    <div :if={not @row[:group]} class="gx-actions">
+      <.row_action
+        :for={action <- @column.actions}
+        :if={action_shown?(action, @row.task, @ctx)}
+        ctx={@ctx}
+        row={@row}
+        action={action}
+      />
+    </div>
+    """
+  end
+
   defp cell_content(%{column: %{field: field, inner_block: nil}} = assigns)
        when field in [:total_slack, :free_slack] do
     assigns = assign(assigns, :slack, assigns.row[:slack] && Map.fetch!(assigns.row.slack, field))
@@ -947,6 +965,79 @@ defmodule GanttEx.Live.Components do
     </span>
     """
   end
+
+  # Actions that edit are hidden on read-only tasks
+  defp action_shown?(%{editing: true}, task, ctx) when ctx.readonly or task.readonly, do: false
+  defp action_shown?(%{id: :edit, builtin: true}, _task, ctx), do: ctx.lightbox
+  defp action_shown?(_action, _task, _ctx), do: true
+
+  attr :ctx, :map, required: true
+  attr :row, :map, required: true
+  attr :action, :map, required: true
+
+  defp row_action(%{action: %{id: :drag, builtin: true}} = assigns) do
+    reorder = Map.get(assigns.ctx, :reorder, :ok)
+
+    assigns =
+      assign(assigns,
+        disabled: reorder != :ok,
+        title:
+          case reorder do
+            :ok -> assigns.ctx.labels.drag_to_reorder
+            :sorted -> assigns.ctx.labels.reorder_sorted
+            :filtered -> assigns.ctx.labels.reorder_filtered
+            _disabled -> assigns.ctx.labels.reorder_disabled
+          end
+      )
+
+    ~H"""
+    <button
+      id={action_dom_id(@ctx, @row, @action)}
+      type="button"
+      class="gx-action gx-action--drag"
+      title={@title}
+      aria-label={@title}
+      aria-disabled={to_string(@disabled)}
+      data-gx-drag-handle
+      phx-keydown={not @disabled && "row_key"}
+      phx-value-row={@row.key}
+      phx-target={@ctx.myself}
+    >
+      <.icon name={:grip} />
+    </button>
+    """
+  end
+
+  defp row_action(assigns) do
+    %{action: action, row: %{task: task}, ctx: ctx} = assigns
+    block = action.builtin and action.id == :block
+
+    assigns =
+      assign(assigns,
+        icon: if(block and task.blocked, do: :lock_closed, else: action.icon),
+        label: if(block and task.blocked, do: ctx.labels.unblock_task, else: action.label),
+        on: block and task.blocked
+      )
+
+    ~H"""
+    <button
+      id={action_dom_id(@ctx, @row, @action)}
+      type="button"
+      class={["gx-action", "gx-action--#{dom_key(to_string(@action.id))}", @on && "gx-action--on"]}
+      title={@label}
+      aria-label={@label}
+      phx-click="row_action"
+      phx-value-action={@action.id}
+      phx-value-key={@row.key}
+      phx-target={@ctx.myself}
+    >
+      <.icon name={@icon} />
+    </button>
+    """
+  end
+
+  defp action_dom_id(ctx, row, action),
+    do: "#{ctx.id}-row-#{dom_key(row[:uid] || row.key)}-#{dom_key(to_string(action.id))}"
 
   @doc false
   def cell_value(task, %{field: field}, ctx) do

@@ -10,6 +10,7 @@ defmodule GanttEx.Test.GanttLive do
        tasks: Map.get(session, "tasks", []),
        links: Map.get(session, "links", []),
        opts: Map.get(session, "opts", %{}),
+       row_actions: Map.get(session, "row_actions"),
        test_pid: Map.fetch!(session, "test_pid")
      )}
   end
@@ -31,6 +32,7 @@ defmodule GanttEx.Test.GanttLive do
       <:column :let={task} field={:owner} label="Owner" editor={:text}>
         <span class="owner">{task.meta[:owner]}</span>
       </:column>
+      <:column :if={@row_actions} field={:actions} actions={@row_actions} />
       <:column field={:add} />
     </.live_component>
     """

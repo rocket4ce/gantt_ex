@@ -221,6 +221,18 @@ defmodule GanttEx.Live.Styles do
         text-overflow: ellipsis;
       }
 
+      .gx-sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
+
       .gx-icon {
         width: 16px;
         height: 16px;
@@ -1277,6 +1289,107 @@ defmodule GanttEx.Live.Styles do
         color: var(--gx-accent);
         background: var(--gx-accent-soft);
         border-color: var(--gx-accent-soft);
+      }
+
+      /* Row actions: shown on hover, focus and selection (always on touch screens) */
+      .gx-actions {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .gx-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        color: var(--gx-muted);
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.15s, background-color 0.15s, color 0.15s, transform 0.1s;
+      }
+
+      .gx-action .gx-icon {
+        width: 15px;
+        height: 15px;
+      }
+
+      .gx-row:hover .gx-action,
+      .gx-row:focus-within .gx-action,
+      .gx-row--selected .gx-action {
+        opacity: 1;
+      }
+
+      @media (hover: none) {
+        .gx-action {
+          opacity: 1;
+        }
+      }
+
+      .gx-action:hover {
+        color: var(--gx-text);
+        background: var(--gx-surface-2);
+      }
+
+      .gx-action:active {
+        transform: scale(0.92);
+      }
+
+      .gx-action:focus-visible {
+        opacity: 1;
+        outline: 2px solid var(--gx-accent);
+        outline-offset: -1px;
+      }
+
+      .gx-action--drag {
+        cursor: grab;
+        touch-action: none;
+      }
+
+      .gx-action--drag:active {
+        cursor: grabbing;
+        transform: none;
+      }
+
+      .gx-action--drag[aria-disabled="true"] {
+        cursor: not-allowed;
+      }
+
+      .gx-row:hover .gx-action--drag[aria-disabled="true"],
+      .gx-row--selected .gx-action--drag[aria-disabled="true"] {
+        opacity: 0.35;
+      }
+
+      .gx-action--drag[aria-disabled="true"]:hover {
+        background: transparent;
+      }
+
+      .gx-action--block.gx-action--on {
+        color: var(--gx-danger);
+      }
+
+      .gx-action--block:hover,
+      .gx-action--delete:hover {
+        color: var(--gx-danger);
+        background: var(--gx-danger-soft);
+      }
+
+      .gx-action--restriction:hover {
+        color: var(--gx-warning-strong);
+        background: var(--gx-warning-soft);
+      }
+
+      .gx-action--rename:hover,
+      .gx-action--edit:hover,
+      .gx-action--detail:hover {
+        color: var(--gx-accent-strong);
+        background: var(--gx-accent-soft);
       }
 
       .gx-cell-editor {
@@ -2467,6 +2580,7 @@ defmodule GanttEx.Live.Styles do
         .gx-backdrop,
         .gx-popup,
         .gx-popover,
+        .gx-actions,
         .gx-chip-remove,
         .gx-filter-bar .gx-text-btn,
         .gx-tooltip,

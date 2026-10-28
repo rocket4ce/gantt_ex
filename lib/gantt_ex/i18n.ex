@@ -194,6 +194,17 @@ defmodule GanttEx.I18n do
         to: gettext("To"),
         no_matches: gettext("No matching tasks"),
         no_options: gettext("No options found"),
+        # row actions
+        actions: gettext("Actions"),
+        drag_to_reorder: gettext("Drag to reorder"),
+        reorder_sorted: gettext("Clear the sorting to reorder"),
+        reorder_filtered: gettext("Clear the filters to reorder"),
+        reorder_disabled: gettext("Reordering is not available"),
+        rename: gettext("Rename"),
+        block_task: gettext("Block task"),
+        unblock_task: gettext("Unblock task"),
+        add_restriction: gettext("Add restriction"),
+        open_detail: gettext("Open detail"),
         # confirmation
         confirm_delete_task: gettext("Are you sure you want to delete this task?"),
         confirm_delete_subtasks: gettext("Its subtasks will be deleted too."),

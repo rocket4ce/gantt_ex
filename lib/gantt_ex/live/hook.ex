@@ -9,15 +9,16 @@ defmodule GanttEx.Live.Hook do
 
     * dragging bars (move, resize, progress), with snapping preview
     * drawing dependencies between bar edges
-    * reordering rows in the grid
+    * reordering rows in the grid, from anywhere in the row or from the drag
+      handle of the `:actions` column (whose arrow keys must not scroll)
     * dragging on the timeline to create a task, or to pan the chart
     * resizing grid columns and the grid itself
     * double click to open the lightbox
     * opening the quick info where the bar was clicked
     * Ctrl/Cmd+click and Shift+click selection, and moving the selected bars together
     * undo / redo keyboard shortcuts (they need modifier keys)
-    * fullscreen, print, scrolling and file downloads requested by the server
-      (PNG images are rasterized from the server-rendered SVG)
+    * fullscreen, print, scrolling, focus and file downloads requested by the
+      server (PNG images are rasterized from the server-rendered SVG)
     * reporting the visible area for smart rendering
 
   Each gesture ends with a single event to the server (`gx:drag`, `gx:link`,
@@ -70,7 +71,7 @@ defmodule GanttEx.Live.Hook do
               return
             }
             // Ctrl/Cmd+click and Shift+click extend the selection (phx-click has no modifiers).
-            if (e.target.closest("input, select, textarea, button, a, .gx-popup")) return
+            if (e.target.closest("input, select, textarea, button, a, .gx-popup, .gx-popover")) return
             const el = e.target.closest("[data-gx-bar], [data-gx-row]")
             if (!el) return
             e.preventDefault()
@@ -79,6 +80,11 @@ defmodule GanttEx.Live.Hook do
           }
           // Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y): phx-keydown has no modifiers.
           this.onKeyDown = (e) => {
+            // The arrow keys of a drag handle move its row (on the server), not the scroll
+            if ((e.key === "ArrowUp" || e.key === "ArrowDown") && e.target.closest("[data-gx-drag-handle]")) {
+              e.preventDefault()
+              return
+            }
             if (!(e.ctrlKey || e.metaKey) || e.altKey) return
             if (e.target.closest("input, select, textarea, [contenteditable]")) return
             const key = e.key.toLowerCase()
@@ -102,6 +108,14 @@ defmodule GanttEx.Live.Hook do
           })
           this.handleEvent("gantt_ex:download", (payload) => {
             if (payload.id === this.el.id) this.download(payload)
+          })
+          // Moved elements may have been replaced: give the focus back
+          this.handleEvent("gantt_ex:focus", (payload) => {
+            if (payload.id !== this.el.id) return
+            requestAnimationFrame(() => {
+              const el = this.el.querySelector(payload.selector)
+              if (el && document.activeElement !== el) el.focus({preventScroll: false})
+            })
           })
 
           // Smart rendering: tell the server when the viewport leaves the rendered rows.
@@ -162,8 +176,16 @@ defmodule GanttEx.Live.Hook do
         // -- pointer routing -------------------------------------------------
 
         pointerDown(e) {
-          if (e.button !== 0 || e.target.closest("input, select, textarea, button, a, .gx-popup")) return
+          if (e.button !== 0) return
           const t = e.target
+          const handle = t.closest("[data-gx-drag-handle]")
+          if (handle) {
+            if (this.flag("gxReorder") && handle.getAttribute("aria-disabled") !== "true") {
+              this.reorderRow(e, handle.closest("[data-gx-row]"))
+            }
+            return
+          }
+          if (t.closest("input, select, textarea, button, a, .gx-popup, .gx-popover")) return
           const resizer = t.closest("[data-gx-resize-column]")
           if (resizer) return this.resizeColumn(e, resizer)
           if (this.flag("gxReadonly")) {
@@ -352,6 +374,7 @@ defmodule GanttEx.Live.Hook do
         // -- grid rows ---------------------------------------------------------
 
         reorderRow(e, row) {
+          if (!row) return
           const grid = row.closest("[data-gx-grid]")
           const marker = grid.querySelector("[data-gx-drop-marker]")
           let drop = null
@@ -460,7 +483,7 @@ defmodule GanttEx.Live.Hook do
         // -- misc --------------------------------------------------------------
 
         dblClick(e) {
-          if (e.target.closest("input, select, textarea, button, .gx-popup")) return
+          if (e.target.closest("input, select, textarea, button, .gx-popup, .gx-popover")) return
           const el = e.target.closest("[data-gx-bar], [data-gx-row]")
           if (el) this.push("gx:dblclick", {key: el.dataset.gxBar || el.dataset.gxRow})
         },

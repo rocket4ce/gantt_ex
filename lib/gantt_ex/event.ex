@@ -36,6 +36,10 @@ defmodule GanttEx.Event do
     * `:task_selected` - the user selected a task (`:task`). `:selection` holds
       the ids of every selected task (Ctrl/Cmd+click and Shift+click select
       several).
+    * `:task_action` - the user clicked a row action that the chart does not
+      handle itself (see the `:actions` column of `GanttEx.Live.Gantt`):
+      `:action` is its id (`:restriction`, `:detail` or a custom action) and
+      `:task` the task of the row.
     * `:filters_changed` - the user changed the search or the filters.
       `:filters` holds the normalized values (see `GanttEx.Filter`), which
       can be given back as `:filter_values` to restore them:
@@ -59,6 +63,7 @@ defmodule GanttEx.Event do
     :index,
     :siblings,
     :selection,
+    :action,
     :filters
   ]
 
@@ -72,6 +77,7 @@ defmodule GanttEx.Event do
           | :link_deleted
           | :task_selected
           | :branch_requested
+          | :task_action
           | :filters_changed
 
   @type t :: %__MODULE__{
@@ -84,6 +90,7 @@ defmodule GanttEx.Event do
           index: non_neg_integer() | nil,
           siblings: [Task.id()] | nil,
           selection: [Task.id()] | nil,
+          action: atom() | String.t() | nil,
           filters: GanttEx.Filter.values() | nil
         }
 

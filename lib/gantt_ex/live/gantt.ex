@@ -550,7 +550,7 @@ defmodule GanttEx.Live.Gantt do
       filtering: filtering,
       filter_cache: filtering.cache,
       search_cache: filtering.search_cache,
-      reorderable: reorderable?(a, filtering),
+      reorderable: reorder_state(a, filtering) == :ok and not a.readonly,
       level: level,
       rows: rows,
       bars: bars,
@@ -587,7 +587,8 @@ defmodule GanttEx.Live.Gantt do
         inline_edit: a.inline_edit,
         tooltips: a.tooltips,
         lightbox: a.lightbox,
-        resources: a.ctx_resources
+        resources: a.ctx_resources,
+        reorder: reorder_state(a, filtering)
       }
     )
     |> apply_window()
@@ -730,9 +731,13 @@ defmodule GanttEx.Live.Gantt do
   end
 
   # Rows can only be dragged when they are shown in tree order.
-  defp reorderable?(a, filtering) do
-    a.reorder and not a.readonly and is_nil(a.sort) and is_nil(filtering.visible) and
-      a.group_by in [nil, false]
+  defp reorder_state(a, filtering) do
+    cond do
+      not a.reorder or a.group_by not in [nil, false] -> :disabled
+      a.sort -> :sorted
+      filtering.visible -> :filtered
+      true -> :ok
+    end
   end
 
   # CPM runs when something shows it, and only again when the store changes.
@@ -1282,6 +1287,43 @@ defmodule GanttEx.Live.Gantt do
     {:noreply, socket |> assign(popover: nil) |> prepare()}
   end
 
+  # -- events: row actions -----------------------------------------------------
+
+  def handle_event("row_action", %{"action" => action, "key" => key}, socket) do
+    case find_action(socket.assigns.columns, action) do
+      nil -> {:noreply, socket}
+      action -> {:noreply, row_action(socket, action, key)}
+    end
+  end
+
+  # The arrow keys move the row of a focused drag handle among its siblings.
+  def handle_event("row_key", %{"key" => key, "row" => row_key}, socket)
+      when key in ["ArrowUp", "ArrowDown"] do
+    a = socket.assigns
+
+    socket =
+      with_editable_task(socket, row_key, fn task ->
+        siblings = Store.child_ids(a.store, task.parent)
+        index = Enum.find_index(siblings, &(&1 == task.id))
+        target = if key == "ArrowUp", do: index - 1, else: index + 1
+
+        if a.reorderable and target >= 0 and target < length(siblings) do
+          socket
+          |> apply_result(Store.move_task(a.store, task.id, task.parent, target))
+          |> push_event("gantt_ex:focus", %{
+            id: a.id,
+            selector: "[data-gx-row='#{row_key}'] [data-gx-drag-handle]"
+          })
+        else
+          socket
+        end
+      end)
+
+    {:noreply, prepare(socket)}
+  end
+
+  def handle_event("row_key", _params, socket), do: {:noreply, socket}
+
   # -- events: lightbox --------------------------------------------------------
 
   def handle_event("add", %{"parent" => parent_key}, socket) do
@@ -1756,6 +1798,65 @@ defmodule GanttEx.Live.Gantt do
 
   def handle_event("gx:dblclick", %{"key" => key}, socket) do
     {:noreply, socket |> open_lightbox(key) |> prepare()}
+  end
+
+  # -- helpers: row actions ----------------------------------------------------
+
+  defp find_action(columns, id) do
+    columns
+    |> Enum.filter(&(&1.field == :actions))
+    |> Enum.flat_map(& &1.actions)
+    |> Enum.find(&(to_string(&1.id) == id and not (&1.builtin and &1.id == :drag)))
+  end
+
+  defp row_action(socket, %{builtin: true, id: :rename}, key) do
+    with_editable_task(socket, key, fn _task ->
+      a = socket.assigns
+      text = Enum.find(a.columns, &(&1.field == :text and &1.editor))
+
+      if text do
+        socket
+        |> select_task(key, false)
+        |> assign(editing: {key, :text})
+        |> prepare()
+      else
+        socket |> open_lightbox(key) |> prepare()
+      end
+    end)
+  end
+
+  defp row_action(socket, %{builtin: true, id: :edit}, key),
+    do: socket |> open_lightbox(key) |> prepare()
+
+  defp row_action(socket, %{builtin: true, id: :block}, key) do
+    with_editable_task(socket, key, fn task ->
+      socket
+      |> apply_result(
+        Store.update_task(socket.assigns.store, task.id, %{blocked: not task.blocked})
+      )
+      |> prepare()
+    end)
+  end
+
+  defp row_action(socket, %{builtin: true, id: :delete}, key) do
+    {:noreply, socket} = request_delete_one(socket, key)
+    socket
+  end
+
+  # Actions handled by the host, such as opening a side panel
+  defp row_action(socket, %{editing: editing, id: id}, key) do
+    run = fn task ->
+      notify(socket, %Event{
+        gantt_id: socket.assigns.id,
+        type: :task_action,
+        action: id,
+        task: task
+      })
+
+      socket
+    end
+
+    if editing, do: with_editable_task(socket, key, run), else: with_task(socket, key, run)
   end
 
   # -- helpers: filters --------------------------------------------------------
