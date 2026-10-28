@@ -30,6 +30,9 @@ defmodule GanttEx.Event do
       and `:siblings` (ordered ids of the new siblings) describe where.
     * `:link_created`, `:link_updated`, `:link_deleted` - `:link` holds the link,
       `:changes` the changed fields for updates.
+    * `:batch` - with `batch_events: true`, the changes of one user action
+      (the events above, in order) in `:events`. Dragging a task with
+      auto-scheduling sends one batch with the task and every task it moved.
     * `:branch_requested` - the user expanded a task with `has_children: true`
       whose children are not loaded yet: load them and render the component
       with them (dynamic loading).
@@ -72,7 +75,8 @@ defmodule GanttEx.Event do
     :selection,
     :action,
     :filters,
-    :columns
+    :columns,
+    :events
   ]
 
   @type type ::
@@ -83,6 +87,7 @@ defmodule GanttEx.Event do
           | :link_created
           | :link_updated
           | :link_deleted
+          | :batch
           | :task_selected
           | :branch_requested
           | :task_action
@@ -109,7 +114,8 @@ defmodule GanttEx.Event do
           selection: [Task.id()] | nil,
           action: atom() | String.t() | nil,
           filters: GanttEx.Filter.values() | nil,
-          columns: column_layout() | nil
+          columns: column_layout() | nil,
+          events: [t()] | nil
         }
 
   @doc """

@@ -93,6 +93,10 @@ defmodule GanttEx.Live.Gantt do
     * `:filter` - a 1-arity function returning `true` for the tasks to show
       (their ancestors are shown too). Combined with the filters of the toolbar.
     * `:notify` - the pid that receives the events. Defaults to the parent LiveView.
+    * `:batch_events` - report the changes of each user action as one
+      `:batch` event (see `GanttEx.Event`) instead of one event per changed
+      task or link. A move with auto-scheduling can change thousands of tasks:
+      a batch lets the host persist them at once. Defaults to `false`.
 
   Filters and columns:
 
@@ -271,6 +275,7 @@ defmodule GanttEx.Live.Gantt do
     filters: [:search, :status, :type, :dates],
     column_chooser: true,
     notify: nil,
+    batch_events: false,
     column: [],
     task_text: [],
     tooltip: [],
@@ -2563,6 +2568,12 @@ defmodule GanttEx.Live.Gantt do
   end
 
   defp auto_schedule(_a, store, changes), do: {store, changes}
+
+  defp notify_changes(%{assigns: %{batch_events: true, id: id}} = socket, [_ | _] = changes) do
+    events = Enum.map(changes, &Event.from_change(id, &1))
+    notify(socket, %Event{gantt_id: id, type: :batch, events: events})
+    socket
+  end
 
   defp notify_changes(socket, changes) do
     Enum.each(changes, &notify(socket, Event.from_change(socket.assigns.id, &1)))
