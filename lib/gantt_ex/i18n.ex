@@ -194,6 +194,11 @@ defmodule GanttEx.I18n do
         to: gettext("To"),
         no_matches: gettext("No matching tasks"),
         no_options: gettext("No options found"),
+        # columns
+        columns: gettext("Columns"),
+        reset: gettext("Reset"),
+        move_up: gettext("Move up"),
+        move_down: gettext("Move down"),
         # row actions
         actions: gettext("Actions"),
         drag_to_reorder: gettext("Drag to reorder"),

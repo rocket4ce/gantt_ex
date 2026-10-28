@@ -13,6 +13,8 @@ defmodule GanttEx.Live.Hook do
       handle of the `:actions` column (whose arrow keys must not scroll)
     * dragging on the timeline to create a task, or to pan the chart
     * resizing grid columns and the grid itself
+    * reordering columns by dragging their header, or their item in the
+      column chooser
     * double click to open the lightbox
     * opening the quick info where the bar was clicked
     * Ctrl/Cmd+click and Shift+click selection, and moving the selected bars together
@@ -22,8 +24,8 @@ defmodule GanttEx.Live.Hook do
     * reporting the visible area for smart rendering
 
   Each gesture ends with a single event to the server (`gx:drag`, `gx:link`,
-  `gx:reorder`, `gx:create`, `gx:resize`, `gx:dblclick`, `gx:viewport`), which decides the
-  outcome and re-renders the chart.
+  `gx:reorder`, `gx:create`, `gx:resize`, `gx:column_move`, `gx:dblclick`,
+  `gx:viewport`), which decides the outcome and re-renders the chart.
 
   The hook is extracted at compile time; import it in your `app.js`:
 
@@ -185,9 +187,12 @@ defmodule GanttEx.Live.Hook do
             }
             return
           }
-          if (t.closest("input, select, textarea, button, a, .gx-popup, .gx-popover")) return
           const resizer = t.closest("[data-gx-resize-column]")
           if (resizer) return this.resizeColumn(e, resizer)
+          // Headers can be dragged from their sort button too: a click without moving still sorts
+          const column = t.closest("[data-gx-column]")
+          if (column && !t.closest("input, select, textarea, a, [data-gx-no-drag]")) return this.dragColumn(e, column)
+          if (t.closest("input, select, textarea, button, a, .gx-popup, .gx-popover")) return
           if (this.flag("gxReadonly")) {
             if (t.closest("[data-gx-chart]")) this.pan(e)
             return
@@ -476,6 +481,54 @@ defmodule GanttEx.Live.Hook do
             },
             onEnd: (_dx, _dy, _ev, moved) => {
               if (moved) this.push("gx:resize", {column, width})
+            }
+          })
+        },
+
+        // Moves a column before or after another one of the same list: the grid header
+        // (horizontal) or the column chooser (vertical), with a line where it will drop.
+        dragColumn(e, item) {
+          const list = item.closest("[data-gx-column-list]")
+          if (!list) return
+          const vertical = list.dataset.gxColumnList === "vertical"
+          const marker = list.querySelector("[data-gx-column-marker]")
+          // Positions are taken before the dragged item starts following the pointer
+          const box = list.getBoundingClientRect()
+          const items = [...list.querySelectorAll("[data-gx-column]")].map((el) => {
+            const r = el.getBoundingClientRect()
+            return vertical
+              ? {el, start: r.top - box.top + list.scrollTop, end: r.bottom - box.top + list.scrollTop}
+              : {el, start: r.left - box.left, end: r.right - box.left}
+          })
+          let drop = null
+
+          const hideMarker = () => { if (marker) marker.style.display = "none" }
+          const clear = () => {
+            item.classList.remove("gx-column--dragging")
+            item.style.removeProperty("--gx-drag-offset")
+            this.el.classList.remove("gx-root--moving-column")
+            hideMarker()
+          }
+
+          this.track(e, {
+            threshold: 5,
+            onMove: (dx, dy, ev) => {
+              item.classList.add("gx-column--dragging")
+              this.el.classList.add("gx-root--moving-column")
+              item.style.setProperty("--gx-drag-offset", `${vertical ? dy : dx}px`)
+              const rect = list.getBoundingClientRect()
+              const pos = vertical ? ev.clientY - rect.top + list.scrollTop : ev.clientX - rect.left
+              const target = items.find((it) => pos >= it.start && pos < it.end)
+              if (!target || target.el === item) { drop = null; return hideMarker() }
+              const after = pos > (target.start + target.end) / 2
+              drop = {target: target.el.dataset.gxColumn, position: after ? "after" : "before"}
+              if (!marker) return
+              marker.style.display = "block"
+              marker.style[vertical ? "top" : "left"] = `${(after ? target.end : target.start) - 1}px`
+            },
+            onEnd: (_dx, _dy, _ev, moved) => {
+              clear()
+              if (moved && drop) this.push("gx:column_move", {field: item.dataset.gxColumn, ...drop})
             }
           })
         },

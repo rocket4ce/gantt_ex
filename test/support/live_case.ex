@@ -44,12 +44,14 @@ defmodule GanttEx.LiveCase do
 
   @doc """
   Mounts the chart. Options are given to the component as attributes, but
-  `:row_actions`, which adds an `:actions` column with these actions.
+  `:row_actions`, which adds an `:actions` column with these actions, and
+  `extra_columns: true`, which adds hidden `:wbs` and `:cost` columns.
   """
   def mount_gantt(conn, opts \\ []) do
     {tasks, opts} = Keyword.pop(opts, :tasks, sample_tasks())
     {links, opts} = Keyword.pop(opts, :links, sample_links())
     {row_actions, opts} = Keyword.pop(opts, :row_actions)
+    {extra_columns, opts} = Keyword.pop(opts, :extra_columns, false)
 
     live_isolated(conn, GanttEx.Test.GanttLive,
       session: %{
@@ -57,6 +59,7 @@ defmodule GanttEx.LiveCase do
         "links" => links,
         "opts" => Map.new(opts),
         "row_actions" => row_actions,
+        "extra_columns" => extra_columns,
         "test_pid" => self()
       }
     )

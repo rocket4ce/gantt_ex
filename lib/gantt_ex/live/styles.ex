@@ -941,6 +941,158 @@ defmodule GanttEx.Live.Styles do
         font-style: italic;
       }
 
+      /* ------------------------------------------------------- column chooser */
+      .gx-columns {
+        width: min(300px, calc(100% - 20px));
+      }
+
+      .gx-columns-form {
+        min-height: 0;
+        padding: 6px;
+        overflow: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+      }
+
+      .gx-column-list {
+        position: relative;
+      }
+
+      .gx-column-list ul {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+
+      .gx-column-item {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 0 4px 0 2px;
+        border-radius: 8px;
+        transition: background-color 0.12s;
+      }
+
+      .gx-column-item:hover {
+        background: color-mix(in srgb, var(--gx-text) 4%, transparent);
+      }
+
+      .gx-column-item .gx-option {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .gx-column-item .gx-option:hover {
+        background: transparent;
+      }
+
+      .gx-column-item--hidden .gx-truncate {
+        color: var(--gx-muted);
+      }
+
+      .gx-column-item .gx-option:has(input:disabled) {
+        cursor: default;
+      }
+
+      .gx-column-item .gx-option:has(input:disabled) .gx-option-check {
+        opacity: 0.55;
+      }
+
+      .gx-column-grip {
+        display: inline-flex;
+        flex: none;
+        padding: 4px 0;
+        color: var(--gx-muted);
+        cursor: grab;
+        opacity: 0.6;
+        touch-action: none;
+      }
+
+      .gx-column-grip .gx-icon {
+        width: 14px;
+        height: 14px;
+      }
+
+      .gx-column-item:hover .gx-column-grip {
+        opacity: 1;
+      }
+
+      /* the arrows are always reachable with the keyboard, shown on hover */
+      .gx-column-move {
+        width: 22px;
+        height: 22px;
+        opacity: 0;
+      }
+
+      .gx-column-item:hover .gx-column-move,
+      .gx-column-item:focus-within .gx-column-move {
+        opacity: 1;
+      }
+
+      .gx-column-move:disabled {
+        visibility: hidden;
+      }
+
+      @media (hover: none) {
+        .gx-column-move {
+          opacity: 1;
+        }
+      }
+
+      /* dragging a column: it follows the pointer, a line shows where it drops */
+      .gx-column--dragging {
+        z-index: 4;
+        opacity: 0.85;
+        pointer-events: none;
+      }
+
+      [data-gx-column-list="horizontal"] .gx-column--dragging {
+        translate: var(--gx-drag-offset, 0px) 0;
+        background: var(--gx-surface-2);
+        box-shadow: var(--gx-shadow-lg);
+      }
+
+      [data-gx-column-list="vertical"] .gx-column--dragging {
+        translate: 0 var(--gx-drag-offset, 0px);
+        background: var(--gx-bg);
+        box-shadow: var(--gx-shadow-lg);
+      }
+
+      .gx-column-marker {
+        position: absolute;
+        z-index: 6;
+        display: none;
+        background: var(--gx-accent);
+        border-radius: 2px;
+        box-shadow: 0 0 0 3px var(--gx-accent-soft);
+        pointer-events: none;
+      }
+
+      [data-gx-column-list="horizontal"] > .gx-column-marker {
+        top: 4px;
+        bottom: 4px;
+        width: 2px;
+      }
+
+      [data-gx-column-list="vertical"] > .gx-column-marker {
+        right: 6px;
+        left: 6px;
+        height: 2px;
+      }
+
+      .gx-head-cell {
+        cursor: grab;
+      }
+
+      .gx-root--moving-column,
+      .gx-root--moving-column * {
+        cursor: grabbing !important;
+      }
+
       /* -------------------------------------------------------- filter status */
       .gx-filter-bar {
         display: flex;

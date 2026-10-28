@@ -47,6 +47,13 @@ defmodule GanttEx.Event do
           %{search: "slab", status: [:blocked], responsible: ["uuid-1", nil],
             dates: %{from: ~D[2025-01-01], to: ~D[2025-01-31]}}
 
+    * `:columns_changed` - the user showed, hid, moved or resized a column, or
+      reset them. `:columns` holds the layout, which can be given back as
+      `:column_layout` to restore it:
+
+          %{order: ["wbs", "text", "start_date", "cost"], hidden: ["cost"],
+            widths: %{"text" => 300}, grid_width: nil}
+
   `:gantt_id` is the `id` of the component that sent the event, which allows
   several charts in the same LiveView.
   """
@@ -64,7 +71,8 @@ defmodule GanttEx.Event do
     :siblings,
     :selection,
     :action,
-    :filters
+    :filters,
+    :columns
   ]
 
   @type type ::
@@ -79,6 +87,15 @@ defmodule GanttEx.Event do
           | :branch_requested
           | :task_action
           | :filters_changed
+          | :columns_changed
+
+  @typedoc "A column layout, as sent in `:columns_changed` events."
+  @type column_layout :: %{
+          order: [String.t()],
+          hidden: [String.t()],
+          widths: %{String.t() => pos_integer()},
+          grid_width: pos_integer() | nil
+        }
 
   @type t :: %__MODULE__{
           gantt_id: String.t(),
@@ -91,7 +108,8 @@ defmodule GanttEx.Event do
           siblings: [Task.id()] | nil,
           selection: [Task.id()] | nil,
           action: atom() | String.t() | nil,
-          filters: GanttEx.Filter.values() | nil
+          filters: GanttEx.Filter.values() | nil,
+          columns: column_layout() | nil
         }
 
   @doc """

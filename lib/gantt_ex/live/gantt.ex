@@ -230,6 +230,7 @@ defmodule GanttEx.Live.Gantt do
     task_class: nil,
     filter: nil,
     filters: [:search, :status, :type, :dates],
+    column_chooser: true,
     notify: nil,
     column: [],
     task_text: [],
@@ -286,8 +287,9 @@ defmodule GanttEx.Live.Gantt do
        notice: nil,
        zoom_name: nil,
        zoom_attr: nil,
-       column_widths: %{},
-       grid_width_override: nil,
+       # columns: the user's layout and the last `:column_layout` received
+       column_state: Columns.normalize_layout(nil),
+       column_attr: :unset,
        labels_locale: nil,
        timeline: nil,
        viewport: %{top: 0, height: 900},
@@ -314,11 +316,12 @@ defmodule GanttEx.Live.Gantt do
   def update(assigns, socket) do
     socket =
       socket
-      |> assign(Map.drop(assigns, [:tasks, :links, :zoom_levels, :filter_values]))
+      |> assign(Map.drop(assigns, [:tasks, :links, :zoom_levels, :filter_values, :column_layout]))
       |> assign_defaults(assigns)
       |> load_data(assigns)
       |> assign_i18n()
       |> assign_filter_values(assigns)
+      |> assign_column_layout(assigns)
       |> assign_zoom()
       |> prepare()
 
@@ -443,6 +446,17 @@ defmodule GanttEx.Live.Gantt do
     end
   end
 
+  # Same rule as `:filter_values`: only a different layout replaces the user's.
+  defp assign_column_layout(socket, assigns) do
+    case assigns do
+      %{column_layout: layout} when layout != socket.assigns.column_attr ->
+        assign(socket, column_attr: layout, column_state: Columns.normalize_layout(layout))
+
+      _ ->
+        socket
+    end
+  end
+
   # Values are kept against every status, so a critical filter survives
   # hiding the critical path (it is ignored meanwhile).
   defp filter_definitions(a, critical),
@@ -494,7 +508,9 @@ defmodule GanttEx.Live.Gantt do
         {Store.key(r.id), r}
       end)
 
-    a = Map.put(a, :ctx_resources, ctx_resources)
+    available = available_columns(a)
+    columns = Enum.filter(available, & &1.visible)
+    a = Map.merge(a, %{ctx_resources: ctx_resources, columns: columns})
     selection = normalize_selection(a)
     show_critical = if is_nil(a.show_critical), do: a.critical_path, else: a.show_critical
     analysis = analysis(a, show_critical)
@@ -525,7 +541,6 @@ defmodule GanttEx.Live.Gantt do
     bars =
       Enum.map(layout.bars ++ layout.segments, &decorate_bar(&1, Map.put(a, :timeline, timeline)))
 
-    columns = Columns.build(a.column, a.labels, widths: a.column_widths, readonly: a.readonly)
     grid_width = grid_width(a, columns)
     chart_height = max(layout.height, 0)
 
@@ -564,6 +579,7 @@ defmodule GanttEx.Live.Gantt do
           })
         end),
       columns: columns,
+      column_choices: a.column_chooser && available,
       grid_width_value: grid_width,
       chart_width: layout.width,
       chart_height: chart_height,
@@ -744,7 +760,7 @@ defmodule GanttEx.Live.Gantt do
   defp analysis(a, show_critical) do
     needed =
       show_critical or a.show_slack or
-        Enum.any?(a.column, &(Map.get(&1, :field) in [:total_slack, :free_slack]))
+        Enum.any?(a.columns, &(&1.field in [:total_slack, :free_slack]))
 
     cached = a[:analysis_cache]
 
@@ -920,7 +936,11 @@ defmodule GanttEx.Live.Gantt do
   end
 
   defp grid_width(a, columns) do
-    a.grid_width_override || a.grid_width || Columns.total_width(columns)
+    a.column_state.grid_width || a.grid_width || Columns.total_width(columns)
+  end
+
+  defp available_columns(a, state \\ nil) do
+    Columns.available(a.column, a.labels, layout: state || a.column_state, readonly: a.readonly)
   end
 
   defp root_style(a, columns, grid_width, bar_height, level) do
@@ -983,6 +1003,7 @@ defmodule GanttEx.Live.Gantt do
         show_history={@undo and not @readonly}
         show_critical={@show_critical}
         filters={@filtering.definitions != [] && @filtering}
+        columns={@column_choices}
         popover={@popover}
       >
         {render_slot(@toolbar_actions)}
@@ -1323,6 +1344,75 @@ defmodule GanttEx.Live.Gantt do
   end
 
   def handle_event("row_key", _params, socket), do: {:noreply, socket}
+
+  # -- events: columns ---------------------------------------------------------
+
+  def handle_event("columns_visibility", params, socket) do
+    a = socket.assigns
+    shown = MapSet.new(List.wrap(params["visible"]))
+    available = available_columns(a)
+
+    hidden =
+      for column <- available,
+          not column.tree,
+          not MapSet.member?(shown, column.key),
+          do: column.key
+
+    # the grid grows or shrinks by the columns shown or hidden, when its width was set
+    delta =
+      Enum.reduce(available, 0, fn column, delta ->
+        cond do
+          column.tree -> delta
+          column.visible and column.key in hidden -> delta - column.width
+          not column.visible and column.key not in hidden -> delta + column.width
+          true -> delta
+        end
+      end)
+
+    state = %{
+      a.column_state
+      | order: Enum.map(available, & &1.key),
+        hidden: hidden,
+        grid_width: resized_grid(a, delta)
+    }
+
+    {:noreply, socket |> put_columns(state) |> prepare()}
+  end
+
+  # Keyboard alternative to dragging in the column chooser.
+  def handle_event("column_move", %{"field" => field, "direction" => direction}, socket) do
+    choices = available_columns(socket.assigns)
+    index = Enum.find_index(choices, &(&1.key == field))
+    neighbour = index && Enum.at(choices, if(direction == "up", do: index - 1, else: index + 1))
+
+    socket =
+      if index && neighbour && (direction == "down" or index > 0) do
+        position = if direction == "up", do: "before", else: "after"
+        moved_to = if direction == "up", do: index - 1, else: index + 1
+        # at the ends of the list the button gets disabled: focus the other one
+        direction =
+          cond do
+            moved_to == 0 -> "down"
+            moved_to == length(choices) - 1 -> "up"
+            true -> direction
+          end
+
+        socket
+        |> move_column(field, neighbour.key, position)
+        |> push_event("gantt_ex:focus", %{
+          id: socket.assigns.id,
+          selector: "[data-gx-column-item='#{field}'] [data-gx-move='#{direction}']"
+        })
+      else
+        socket
+      end
+
+    {:noreply, prepare(socket)}
+  end
+
+  def handle_event("columns_reset", _params, socket) do
+    {:noreply, socket |> put_columns(Columns.normalize_layout(nil)) |> prepare()}
+  end
 
   # -- events: lightbox --------------------------------------------------------
 
@@ -1761,24 +1851,35 @@ defmodule GanttEx.Live.Gantt do
           socket
 
         {"__grid", width} ->
-          assign(socket, grid_width_override: width |> round() |> max(120) |> min(2000))
+          put_columns(socket, %{a.column_state | grid_width: width})
 
         {field, width} ->
-          case Enum.find(a.columns, &(to_string(&1.field) == field and not &1.tree)) do
+          case Enum.find(a.columns, &(&1.key == field and not &1.tree)) do
             nil ->
               socket
 
             col ->
               width = width |> round() |> max(32) |> min(800)
 
-              assign(socket,
-                column_widths: Map.put(a.column_widths, field, width),
-                grid_width_override: a.grid_width_value + width - col.width
-              )
+              socket
+              |> put_columns(%{
+                a.column_state
+                | widths: Map.put(a.column_state.widths, field, width),
+                  grid_width: resized_grid(a, width - col.width)
+              })
           end
       end
 
     {:reply, %{ok: true}, prepare(socket)}
+  end
+
+  def handle_event(
+        "gx:column_move",
+        %{"field" => field, "target" => target, "position" => position},
+        socket
+      )
+      when position in ["before", "after"] do
+    {:reply, %{ok: true}, socket |> move_column(field, target, position) |> prepare()}
   end
 
   def handle_event("gx:select", %{"key" => key, "mode" => mode}, socket) do
@@ -1798,6 +1899,67 @@ defmodule GanttEx.Live.Gantt do
 
   def handle_event("gx:dblclick", %{"key" => key}, socket) do
     {:noreply, socket |> open_lightbox(key) |> prepare()}
+  end
+
+  # -- helpers: columns --------------------------------------------------------
+
+  # Applies a new column layout and reports it when it changed.
+  defp put_columns(socket, state) do
+    a = socket.assigns
+
+    old =
+      Columns.layout(
+        Columns.available(a.column, a.labels, layout: a.column_state),
+        a.column_state
+      )
+
+    new = Columns.layout(Columns.available(a.column, a.labels, layout: state), state)
+
+    if new != old,
+      do: notify(socket, %Event{gantt_id: a.id, type: :columns_changed, columns: new})
+
+    shown =
+      for column <- available_columns(a, state),
+          column.visible,
+          into: MapSet.new(),
+          do: column.field
+
+    # sorting or editing a column that is no longer shown would be confusing
+    sort = with {field, _direction} <- a.sort, true <- MapSet.member?(shown, field), do: a.sort
+    editing = with {_key, field} <- a.editing, true <- MapSet.member?(shown, field), do: a.editing
+
+    assign(socket,
+      column_state: state,
+      sort: if(sort in [nil, false], do: nil, else: sort),
+      editing: if(editing in [nil, false], do: nil, else: editing)
+    )
+  end
+
+  defp move_column(socket, field, target, position) do
+    available = available_columns(socket.assigns)
+    order = Enum.map(available, & &1.key)
+
+    if field != target and field in order and target in order do
+      order = List.delete(order, field)
+      index = Enum.find_index(order, &(&1 == target)) + if(position == "after", do: 1, else: 0)
+
+      # the layout now lists every column: keep the hidden ones hidden
+      put_columns(socket, %{
+        socket.assigns.column_state
+        | order: List.insert_at(order, index, field),
+          hidden: for(column <- available, not column.visible, do: column.key)
+      })
+    else
+      socket
+    end
+  end
+
+  # A grid with a set width (by the user or the `:grid_width` attribute) is
+  # resized with its columns; otherwise it keeps fitting them.
+  defp resized_grid(a, delta) do
+    if a.column_state.grid_width || a.grid_width,
+      do: max(a.grid_width_value + delta, 120),
+      else: nil
   end
 
   # -- helpers: row actions ----------------------------------------------------

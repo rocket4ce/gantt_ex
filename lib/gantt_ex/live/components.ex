@@ -47,6 +47,11 @@ defmodule GanttEx.Live.Components do
       "`%{definitions, values, queries}` for the search and the filter panel, `nil` to hide them"
 
   attr :popover, :atom, default: nil, doc: "the open popover: `:filters`, `:columns` or `nil`"
+
+  attr :columns, :any,
+    default: nil,
+    doc: "every available column for the column chooser (see `GanttEx.Live.Columns.available/3`)"
+
   slot :inner_block
 
   def toolbar(assigns) do
@@ -198,6 +203,7 @@ defmodule GanttEx.Live.Components do
         filters={@filters}
         open={@popover == :filters}
       />
+      <.column_menu :if={@columns} ctx={@ctx} columns={@columns} open={@popover == :columns} />
 
       {render_slot(@inner_block)}
 
@@ -389,6 +395,150 @@ defmodule GanttEx.Live.Components do
             value={Map.get(@filters.values, definition.id)}
             query={Map.get(@filters.queries, definition.id, "")}
           />
+        </form>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders the "Columns" toolbar button and the column chooser: every
+  available column can be shown or hidden, moved with the drag handle or
+  the arrow buttons, and the defaults restored.
+  """
+  attr :ctx, :map, required: true
+  attr :columns, :list, required: true, doc: "from `GanttEx.Live.Columns.available/3`"
+  attr :open, :boolean, default: false
+
+  def column_menu(assigns) do
+    assigns = assign(assigns, last: length(assigns.columns) - 1)
+
+    ~H"""
+    <div
+      class="gx-popover-anchor"
+      phx-click-away={@open && JS.push("close_popover", target: @ctx.myself)}
+    >
+      <button
+        id={"#{@ctx.id}-columns-toggle"}
+        type="button"
+        class={["gx-btn gx-btn--icon", @open && "gx-btn--active"]}
+        title={@ctx.labels.columns}
+        aria-label={@ctx.labels.columns}
+        aria-haspopup="dialog"
+        aria-expanded={to_string(@open)}
+        aria-controls={"#{@ctx.id}-columns"}
+        phx-click="toggle_popover"
+        phx-value-popover="columns"
+        phx-target={@ctx.myself}
+      >
+        <.icon name={:view_columns} />
+      </button>
+      <div
+        :if={@open}
+        id={"#{@ctx.id}-columns"}
+        class="gx-popover gx-columns"
+        role="dialog"
+        aria-label={@ctx.labels.columns}
+        phx-mounted={JS.focus_first(to: "##{@ctx.id}-columns-form")}
+        phx-window-keydown={
+          JS.push("close_popover", target: @ctx.myself)
+          |> JS.focus(to: "##{@ctx.id}-columns-toggle")
+        }
+        phx-key="Escape"
+      >
+        <header class="gx-popover-header">
+          <h2 class="gx-popover-title">{@ctx.labels.columns}</h2>
+          <button
+            id={"#{@ctx.id}-columns-reset"}
+            type="button"
+            class="gx-text-btn"
+            phx-click="columns_reset"
+            phx-target={@ctx.myself}
+          >
+            <.icon name={:arrow_path} /> {@ctx.labels.reset}
+          </button>
+          <button
+            type="button"
+            class="gx-btn gx-btn--icon gx-btn--small"
+            aria-label={@ctx.labels.close}
+            phx-click={
+              JS.push("close_popover", target: @ctx.myself)
+              |> JS.focus(to: "##{@ctx.id}-columns-toggle")
+            }
+          >
+            <.icon name={:x_mark} />
+          </button>
+        </header>
+        <form
+          id={"#{@ctx.id}-columns-form"}
+          class="gx-columns-form"
+          phx-change="columns_visibility"
+          phx-target={@ctx.myself}
+        >
+          <input type="hidden" name="visible[]" value="" />
+          <div class="gx-column-list" data-gx-column-list="vertical">
+            <ul role="list">
+              <li
+                :for={{col, index} <- Enum.with_index(@columns)}
+                id={"#{@ctx.id}-column-#{dom_key(col.key)}"}
+                class={["gx-column-item", not col.visible && "gx-column-item--hidden"]}
+                data-gx-column={col.key}
+                data-gx-column-item={col.key}
+              >
+                <span class="gx-column-grip" title={@ctx.labels.drag_to_reorder} aria-hidden="true">
+                  <.icon name={:grip} />
+                </span>
+                <label class="gx-option gx-column-check">
+                  <input
+                    type="checkbox"
+                    name="visible[]"
+                    value={col.key}
+                    checked={col.visible}
+                    disabled={col.tree}
+                  />
+                  <span class="gx-option-check" aria-hidden="true"><.icon name={:check} /></span>
+                  <span class="gx-truncate">{col.title}</span>
+                </label>
+                <button
+                  type="button"
+                  class="gx-action gx-column-move"
+                  title={@ctx.labels.move_up}
+                  aria-label={"#{@ctx.labels.move_up}: #{col.title}"}
+                  disabled={index == 0}
+                  data-gx-no-drag
+                  data-gx-move="up"
+                  phx-click="column_move"
+                  phx-value-field={col.key}
+                  phx-value-direction="up"
+                  phx-target={@ctx.myself}
+                >
+                  <.icon name={:chevron_up} />
+                </button>
+                <button
+                  type="button"
+                  class="gx-action gx-column-move"
+                  title={@ctx.labels.move_down}
+                  aria-label={"#{@ctx.labels.move_down}: #{col.title}"}
+                  disabled={index == @last}
+                  data-gx-no-drag
+                  data-gx-move="down"
+                  phx-click="column_move"
+                  phx-value-field={col.key}
+                  phx-value-direction="down"
+                  phx-target={@ctx.myself}
+                >
+                  <.icon name={:chevron_down} />
+                </button>
+              </li>
+            </ul>
+            <span
+              id={"#{@ctx.id}-columns-marker"}
+              class="gx-column-marker"
+              aria-hidden="true"
+              phx-update="ignore"
+              data-gx-column-marker
+            ></span>
+          </div>
         </form>
       </div>
     </div>
@@ -716,13 +866,15 @@ defmodule GanttEx.Live.Components do
 
   def grid_header(assigns) do
     ~H"""
-    <div class="gx-grid-head" role="row">
+    <div class="gx-grid-head" role="row" data-gx-column-list="horizontal">
       <div
         :for={{col, index} <- Enum.with_index(@columns)}
+        id={"#{@ctx.id}-head-#{dom_key(column_key(col))}"}
         role="columnheader"
         class={["gx-head-cell", col.tree && "gx-cell--tree", "gx-align-#{col.align}"]}
         style={column_style(col, index)}
         aria-sort={aria_sort(@sort, col)}
+        data-gx-column={column_key(col)}
       >
         <%= cond do %>
           <% col.field == :actions -> %>
@@ -772,9 +924,18 @@ defmodule GanttEx.Live.Components do
         data-gx-resize-column="__grid"
         data-gx-width={@grid_width}
       ></span>
+      <span
+        id={"#{@ctx.id}-head-marker"}
+        class="gx-column-marker"
+        aria-hidden="true"
+        phx-update="ignore"
+        data-gx-column-marker
+      ></span>
     </div>
     """
   end
+
+  defp column_key(col), do: Map.get_lazy(col, :key, fn -> to_string(col.field) end)
 
   # The tree column takes the free width but keeps a minimum: when the grid is
   # narrowed, the columns on its right are clipped before the task names
