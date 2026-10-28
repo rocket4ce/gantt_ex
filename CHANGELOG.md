@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3 (2026-10-28)
+
+Fixes:
+
+- The quick info of a bar opens where the bar was clicked, instead of at
+  the start of the bar, which could be scrolled under the grid and cover
+  it. It stays in the visible part of the timeline: it opens to the left of
+  the click when there is no room on the right, and follows changes of the
+  page layout
+
 ## 0.1.2 (2026-10-28)
 
 Fixes:
