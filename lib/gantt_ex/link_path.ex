@@ -104,12 +104,17 @@ defmodule GanttEx.LinkPath do
   @spec format_number(number()) :: String.t()
   def format_number(value) when is_integer(value), do: Integer.to_string(value)
 
+  # Integer arithmetic: `Float.round/2` is exact but slow, and a large chart
+  # formats tens of thousands of coordinates
   def format_number(value) when is_float(value) do
-    rounded = Float.round(value, 1)
+    tenths = round(value * 10)
+    sign = if tenths < 0, do: "-", else: ""
+    units = Integer.to_string(div(abs(tenths), 10))
 
-    if rounded == Float.round(rounded),
-      do: Integer.to_string(trunc(rounded)),
-      else: :erlang.float_to_binary(rounded, [:compact, decimals: 1])
+    case rem(abs(tenths), 10) do
+      0 -> sign <> units
+      decimal -> sign <> units <> "." <> Integer.to_string(decimal)
+    end
   end
 
   defp dedup(points) do
