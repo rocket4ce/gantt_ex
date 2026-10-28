@@ -287,8 +287,8 @@ defmodule GanttEx.I18n do
       iex> GanttEx.I18n.restrictions(1, "en")
       "1 open restriction"
 
-      iex> GanttEx.I18n.restrictions(3, "en")
-      "3 open restrictions"
+      iex> GanttEx.I18n.restrictions(3, "es")
+      "3 restricciones abiertas"
   """
   @spec restrictions(non_neg_integer(), locale()) :: String.t()
   def restrictions(count, locale) do
@@ -302,6 +302,9 @@ defmodule GanttEx.I18n do
 
       iex> GanttEx.I18n.filtered_tasks(12, 340, "en")
       "12 of 340 tasks"
+
+      iex> GanttEx.I18n.filtered_tasks(1, 1, "fr")
+      "1 sur 1 tâche"
   """
   @spec filtered_tasks(non_neg_integer(), non_neg_integer(), locale()) :: String.t()
   def filtered_tasks(matched, total, locale) do

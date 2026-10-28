@@ -45,6 +45,17 @@ defmodule GanttEx.Live.StatusIndicatorsTest do
     refute has_element?(view, "#gantt-quick-info .gx-tag--blocked")
   end
 
+  test "are translated", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn, tasks: tasks(), locale: "es")
+
+    assert has_element?(view, "#gantt-row-2 .gx-flag--blocked[title=Bloqueada]")
+
+    assert has_element?(
+             view,
+             "#gantt-row-3 .gx-flag--restricted[title='3 restricciones abiertas']"
+           )
+  end
+
   test "follow the data of the parent", %{conn: conn} do
     {:ok, view, _html} = mount_gantt(conn, tasks: tasks())
 
