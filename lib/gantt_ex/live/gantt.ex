@@ -556,30 +556,9 @@ defmodule GanttEx.Live.Gantt do
     a = Map.merge(a, %{selection: selection, analysis: analysis, show_critical: show_critical})
     filtering = run_filters(a, today)
 
-    rows =
-      a.store
-      |> Store.rows(
-        collapsed: a.collapsed,
-        visible: filtering.visible,
-        sort: a.sort,
-        group_by: group_spec(a)
-      )
-      |> Enum.map(&Map.put(&1, :selected, MapSet.member?(selection, &1.key)))
-      |> Enum.map(&Map.put(&1, :slack, analysis && analysis.tasks[&1.task.id]))
-      |> Enum.map(&Map.put(&1, :loading, MapSet.member?(a.loading, &1.key)))
-
+    rows = rows(a, filtering)
     timeline = build_timeline(a, level, today)
-
-    layout =
-      Layout.build(a.store, rows, timeline,
-        row_height: a.row_height,
-        bar_height: bar_height,
-        baselines: a.baselines
-      )
-
-    bars =
-      Enum.map(layout.bars ++ layout.segments, &decorate_bar(&1, Map.put(a, :timeline, timeline)))
-
+    layout = layout(a, rows, timeline, bar_height)
     grid_width = grid_width(a, columns)
     chart_height = max(layout.height, 0)
 
@@ -607,16 +586,11 @@ defmodule GanttEx.Live.Gantt do
       reorderable: reorder_state(a, filtering) == :ok and not a.readonly,
       level: level,
       rows: rows,
-      bars: bars,
+      rows_cache: {rows_key(a, filtering), rows},
+      layout_cache: {layout_key(a, rows, timeline, bar_height), layout},
+      bars: layout.bars ++ layout.segments,
       rollups: layout.rollups,
-      link_paths:
-        Enum.map(layout.links, fn link ->
-          Map.merge(link, %{
-            selected: link.key == a.selected_link,
-            critical:
-              show_critical and analysis != nil and MapSet.member?(analysis.links, link.link.id)
-          })
-        end),
+      link_paths: layout.links,
       columns: columns,
       column_choices: a.column_chooser && available,
       grid_width_value: grid_width,
@@ -654,6 +628,50 @@ defmodule GanttEx.Live.Gantt do
   @window_buffer 25
   @auto_threshold 120
 
+  # Rows and layout only change with the data, the tree state or the
+  # timeline: selecting a task, opening a popover or a lightbox reuses them.
+  # Their flags (selection, critical path, ...) are set on the window only.
+  defp rows(a, filtering) do
+    key = rows_key(a, filtering)
+
+    case a[:rows_cache] do
+      {^key, rows} ->
+        rows
+
+      _ ->
+        Store.rows(a.store,
+          collapsed: a.collapsed,
+          visible: filtering.visible,
+          sort: a.sort,
+          group_by: group_spec(a)
+        )
+    end
+  end
+
+  defp rows_key(a, filtering),
+    do: {a.store, a.collapsed, filtering.visible, a.sort, group_spec(a)}
+
+  defp layout(a, rows, timeline, bar_height) do
+    key = layout_key(a, rows, timeline, bar_height)
+
+    case a[:layout_cache] do
+      {^key, layout} ->
+        layout
+
+      cached ->
+        Layout.build(a.store, rows, timeline,
+          row_height: a.row_height,
+          bar_height: bar_height,
+          baselines: a.baselines,
+          # links whose bars did not move keep their path
+          link_cache: if(cached, do: elem(cached, 1).link_cache, else: %{})
+        )
+    end
+  end
+
+  defp layout_key(a, rows, timeline, bar_height),
+    do: {a.store, rows, timeline, a.row_height, bar_height, a.baselines}
+
   defp apply_window(%{assigns: a} = socket) do
     count = length(a.rows)
 
@@ -670,18 +688,35 @@ defmodule GanttEx.Live.Gantt do
 
     visible? = fn row -> row >= first and row <= last end
 
-    bars = Enum.filter(a.bars, &visible?.(&1.row))
+    bars = for bar <- a.bars, visible?.(bar.row), do: decorate_bar(bar, a)
+
+    rows =
+      for row <- Enum.slice(a.rows, first..last//1) do
+        Map.merge(row, %{
+          selected: MapSet.member?(a.selection, row.key),
+          slack: a.analysis && a.analysis.tasks[row.task.id],
+          loading: MapSet.member?(a.loading, row.key)
+        })
+      end
+
+    links =
+      for link <- a.link_paths,
+          min(link.source_row, link.target_row) <= last,
+          max(link.source_row, link.target_row) >= first do
+        Map.merge(link, %{
+          selected: link.key == a.selected_link,
+          critical:
+            a.show_critical and a.analysis != nil and
+              MapSet.member?(a.analysis.links, link.link.id)
+        })
+      end
 
     assign(socket,
       window: if(smart_rendering?(a.smart_rendering, count), do: "#{first}:#{last}:#{count}"),
-      window_rows: Enum.slice(a.rows, first..last//1),
+      window_rows: rows,
       window_bars: bars,
       window_rollups: Enum.filter(a.rollups, &visible?.(&1.row)),
-      window_links:
-        Enum.filter(a.link_paths, fn link ->
-          min(link.source_row, link.target_row) <= last and
-            max(link.source_row, link.target_row) >= first
-        end),
+      window_links: links,
       spacer_top: first * a.row_height,
       spacer_bottom: max(count - 1 - last, 0) * a.row_height,
       quick_info_bar: a.quick_info_key && Enum.find(bars, &(&1.key == a.quick_info_key))

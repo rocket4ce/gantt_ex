@@ -72,12 +72,19 @@ defmodule GanttEx.Layout do
           arrow_d: String.t()
         }
 
+  @typedoc """
+  The routes of the links by link key, with the boxes of their bars: given
+  back as `:link_cache`, links whose bars did not move keep their path.
+  """
+  @opaque link_cache :: %{Store.key() => {map(), map(), atom(), number(), map()}}
+
   @type t :: %{
           bars: [bar()],
           segments: [bar()],
           rollups: [rollup()],
           bar_index: %{Store.key() => bar()},
           links: [link_path()],
+          link_cache: link_cache(),
           width: non_neg_integer(),
           height: non_neg_integer()
         }
@@ -92,6 +99,9 @@ defmodule GanttEx.Layout do
     * `:min_bar_width` - defaults to `6`, so very short tasks stay visible.
     * `:baselines` - make room below the bars for the baselines
       (`:planned_start` / `:planned_end`). Defaults to `false`.
+    * `:link_cache` - the `:link_cache` of a previous layout. Routing every
+      link is the most expensive part of a layout, and after an edit most
+      links still join bars that did not move.
   """
   @spec build(Store.t(), [Store.row()], Timeline.t(), keyword()) :: t()
   def build(%Store{} = store, rows, %Timeline{} = timeline, opts \\ []) do
@@ -121,26 +131,43 @@ defmodule GanttEx.Layout do
       |> Map.new(&{&1.key, &1})
       |> Map.merge(bars |> Enum.reverse() |> Map.new(&{&1.key, &1}))
 
-    links =
+    cache = Keyword.get(opts, :link_cache, %{})
+
+    {links, link_cache} =
       for link <- Store.links(store),
           source = Map.get(bar_index, Store.key(link.source)),
-          target = Map.get(bar_index, Store.key(link.target)) do
-        path =
-          LinkPath.route(row_box(source, row_height), row_box(target, row_height), link.type,
-            row_height: row_height
-          )
+          target = Map.get(bar_index, Store.key(link.target)),
+          reduce: {[], %{}} do
+        {links, link_cache} ->
+          key = Store.key(link.id)
+          {from, to, type} = {row_box(source, row_height), row_box(target, row_height), link.type}
 
-        %{
-          key: Store.key(link.id),
-          link: link,
-          source_key: source.key,
-          target_key: target.key,
-          source_row: source.row,
-          target_row: target.row,
-          d: path.d,
-          arrow_d: path.arrow_d
-        }
+          path =
+            case cache do
+              %{^key => {^from, ^to, ^type, ^row_height, path}} ->
+                path
+
+              _ ->
+                from
+                |> LinkPath.route(to, type, row_height: row_height)
+                |> Map.take([:d, :arrow_d])
+            end
+
+          link_path = %{
+            key: key,
+            link: link,
+            source_key: source.key,
+            target_key: target.key,
+            source_row: source.row,
+            target_row: target.row,
+            d: path.d,
+            arrow_d: path.arrow_d
+          }
+
+          {[link_path | links], Map.put(link_cache, key, {from, to, type, row_height, path})}
       end
+
+    links = Enum.reverse(links)
 
     %{
       bars: bars,
@@ -148,6 +175,7 @@ defmodule GanttEx.Layout do
       rollups: rollups(store, rows, timeline, row_height),
       bar_index: bar_index,
       links: links,
+      link_cache: link_cache,
       width: Timeline.width(timeline),
       height: length(rows) * row_height
     }
