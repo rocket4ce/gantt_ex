@@ -69,7 +69,7 @@ Add `gantt_ex` to your dependencies (Phoenix 1.8+, LiveView 1.2+):
 ```elixir
 def deps do
   [
-    {:gantt_ex, "~> 0.2.0"}
+    {:gantt_ex, "~> 0.3.0"}
   ]
 end
 ```

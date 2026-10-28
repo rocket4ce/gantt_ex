@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.3.0 (2026-10-28)
+
+Charts of thousands of tasks edited by many people at once. Measured on a
+real plan of 7,000 tasks and 10,700 links, all under one summary task.
+
+Additions:
+
+- `:batch_events` attribute: the changes of each user action are reported
+  as one `:batch` event (`GanttEx.Event` has an `:events` field) instead of
+  one event per task, so a move that pushes thousands of tasks with
+  auto-scheduling can be saved at once
+- `GanttEx.Store.put_tasks/2` replaces existing tasks without building the
+  store again
+- `GanttEx.CriticalPath.inputs/1`: what an analysis depends on
+- `GanttEx.Layout.build/4` accepts the `:link_cache` of a previous layout
+  and returns its own
+
+Performance:
+
+- New data that only changes some tasks (other people's changes) is
+  applied to the store with `put_tasks/2` instead of building it again
+- Rows, layout and link routes are reused between renders: selecting a
+  task, opening a popover or the lightbox no longer lays out the chart
+  again, and links whose bars did not move keep their route. Selection,
+  critical path and slack flags are only set on the rendered window
+- The critical path is computed again only when dates, durations, types,
+  links or calendars change, not for a new progress or name
+- Working-time arithmetic works on day numbers and skips whole weeks
+  without exceptions (critical path 152 ms to 92 ms)
+- WBS codes are computed in linear time (quadratic in the number of
+  children of a summary task before)
+- Link coordinates are formatted with integer arithmetic
+
 ## 0.2.0 (2026-10-28)
 
 Filters, row actions and dynamic columns, for plans with thousands of tasks

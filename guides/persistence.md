@@ -40,6 +40,26 @@ end
 The last three are not changes of the plan: handle them before your
 generic clause.
 
+## Large plans
+
+A move with auto-scheduling can push thousands of tasks. With
+`batch_events`, the changes of each user action arrive as one `:batch`
+event holding the events above, in order, so they can be saved in one
+transaction:
+
+```elixir
+def handle_info({GanttEx, %GanttEx.Event{type: :batch, events: events}}, socket) do
+  :ok = Planning.apply_events(events)
+  {:noreply, assign(socket, tasks: Planning.list_tasks())}
+end
+```
+
+Render the chart again with the same list where only the changed tasks
+are replaced (same tasks, same order, same links): the component updates
+those tasks in its store instead of building it again, which keeps charts
+of thousands of tasks fast when other people change them. Adding,
+deleting or moving tasks builds the store again.
+
 ## Blocked tasks and restrictions
 
 `blocked` (boolean) and `restrictions` (the number of open restrictions)
