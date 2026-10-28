@@ -105,6 +105,23 @@ defmodule GanttEx.CriticalPath do
     }
   end
 
+  @doc """
+  What the analysis of a store depends on: the tree, the links, the
+  calendars and the dates, durations, types and calendars of the tasks.
+  Stores with the same inputs have the same analysis, so a chart doesn't run
+  it again when only the progress, the names or other fields change.
+  """
+  @spec inputs(Store.t()) :: term()
+  def inputs(%Store{} = store) do
+    tasks =
+      Map.new(store.tasks, fn {id, task} ->
+        {id, {task.type, task.start_date, task.end_date, task.duration, task.calendar_id}}
+      end)
+
+    {tasks, store.children, store.links, store.calendar, store.calendars, store.duration_unit,
+     store.work_time}
+  end
+
   # The links whose source is `task` or one of its ancestors.
   defp outgoing(ctx, task), do: Map.get(ctx.index.outgoing, task.id, [])
 

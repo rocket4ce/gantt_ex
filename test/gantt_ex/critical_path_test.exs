@@ -79,4 +79,18 @@ defmodule GanttEx.CriticalPathTest do
     assert tasks == %{}
     assert MapSet.size(links) == 0
   end
+
+  test "the inputs of the analysis ignore progress and names, not dates" do
+    store =
+      Store.new!(
+        [%{id: 1, start_date: ~D[2025-01-06], duration: 2}, %{id: 2, start_date: ~D[2025-01-08]}],
+        [%{id: 1, source: 1, target: 2}]
+      )
+
+    {:ok, progressed, _} = Store.update_task(store, 1, %{progress: 0.5, text: "Walls"})
+    {:ok, moved, _} = Store.update_task(store, 1, %{start_date: ~D[2025-01-07]})
+
+    assert CriticalPath.inputs(progressed) == CriticalPath.inputs(store)
+    refute CriticalPath.inputs(moved) == CriticalPath.inputs(store)
+  end
 end

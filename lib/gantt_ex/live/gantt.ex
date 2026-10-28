@@ -595,7 +595,7 @@ defmodule GanttEx.Live.Gantt do
     a = Map.merge(a, %{ctx_resources: ctx_resources, columns: columns})
     selection = normalize_selection(a)
     show_critical = if is_nil(a.show_critical), do: a.critical_path, else: a.show_critical
-    analysis = analysis(a, show_critical)
+    {analysis, analysis_cache} = analysis(a, show_critical)
     a = Map.merge(a, %{selection: selection, analysis: analysis, show_critical: show_critical})
     filtering = run_filters(a, today)
 
@@ -622,7 +622,7 @@ defmodule GanttEx.Live.Gantt do
       selection: selection,
       show_critical: show_critical,
       analysis: analysis,
-      analysis_cache: analysis && {a.store, analysis},
+      analysis_cache: analysis_cache,
       filtering: filtering,
       filter_cache: filtering.cache,
       search_cache: filtering.search_cache,
@@ -873,7 +873,9 @@ defmodule GanttEx.Live.Gantt do
     end
   end
 
-  # CPM runs when something shows it, and only again when the store changes.
+  # CPM runs when something shows it, and only again when what it depends on
+  # changes: not for a new progress or name (see CriticalPath.inputs/1).
+  # Returns the analysis and the cache `{store, inputs, analysis}`.
   defp analysis(a, show_critical) do
     needed =
       show_critical or a.show_slack or
@@ -882,9 +884,22 @@ defmodule GanttEx.Live.Gantt do
     cached = a[:analysis_cache]
 
     cond do
-      not needed -> nil
-      cached && elem(cached, 0) == a.store -> elem(cached, 1)
-      true -> CriticalPath.analyze(a.store)
+      not needed ->
+        {nil, cached}
+
+      cached && elem(cached, 0) == a.store ->
+        {elem(cached, 2), cached}
+
+      true ->
+        inputs = CriticalPath.inputs(a.store)
+
+        analysis =
+          case cached do
+            {_store, ^inputs, analysis} -> analysis
+            _ -> CriticalPath.analyze(a.store)
+          end
+
+        {analysis, {a.store, inputs, analysis}}
     end
   end
 
