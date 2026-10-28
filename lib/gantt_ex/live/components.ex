@@ -328,7 +328,9 @@ defmodule GanttEx.Live.Components do
         "gx-row",
         @row.selected && "gx-row--selected",
         @row.task.type == :project && "gx-row--project",
-        @row[:group] && "gx-row--group"
+        @row[:group] && "gx-row--group",
+        @row.task.blocked && "gx-row--blocked",
+        @row.task.restrictions > 0 && "gx-row--restricted"
       ]}
       role="row"
       aria-level={@row.level + 1}
@@ -392,6 +394,7 @@ defmodule GanttEx.Live.Components do
         {cell_value(@row.task, @column, @ctx)}
       <% end %>
     </span>
+    <.status_flags :if={not @row[:group]} ctx={@ctx} task={@row.task} />
     <span :if={@row[:group]} class="gx-count">{@row.count}</span>
     """
   end
@@ -438,6 +441,41 @@ defmodule GanttEx.Live.Components do
       <% else %>
         {cell_value(@row.task, @column, @ctx)}
       <% end %>
+    </span>
+    """
+  end
+
+  attr :ctx, :map, required: true
+  attr :task, :map, required: true
+
+  # The lock of blocked tasks and the number of open restrictions, next to the name
+  defp status_flags(assigns) do
+    assigns =
+      assign(assigns,
+        restrictions:
+          assigns.task.restrictions > 0 &&
+            GanttEx.I18n.restrictions(assigns.task.restrictions, assigns.ctx.locale)
+      )
+
+    ~H"""
+    <span
+      :if={@task.blocked}
+      class="gx-flag gx-flag--blocked"
+      role="img"
+      title={@ctx.labels.blocked}
+      aria-label={@ctx.labels.blocked}
+    >
+      <.icon name={:lock_closed} />
+    </span>
+    <span
+      :if={@restrictions}
+      class="gx-flag gx-flag--restricted"
+      role="img"
+      title={@restrictions}
+      aria-label={@restrictions}
+    >
+      <.icon name={:exclamation_triangle} />
+      <span class="gx-flag-count" aria-hidden="true">{@task.restrictions}</span>
     </span>
     """
   end
@@ -645,6 +683,8 @@ defmodule GanttEx.Live.Components do
         @bar[:critical] && "gx-bar--critical",
         @bar[:segment] && "gx-bar--segment",
         @bar[:deadline] && @bar.deadline.overdue && "gx-bar--overdue",
+        @bar.task.blocked && "gx-bar--blocked",
+        @bar.task.restrictions > 0 && "gx-bar--restricted",
         @bar.class
       ]}
       style={bar_style(@bar)}
@@ -712,9 +752,15 @@ defmodule GanttEx.Live.Components do
   defp bar_label(bar, ctx) do
     task = bar.task
 
-    "#{task.text}, #{Map.fetch!(ctx.labels, task.type)}, " <>
-      "#{ctx.format.(task.start_date, ctx.date_pattern)} – " <>
-      "#{ctx.format.(TaskForm.display_end(task, ctx.unit), ctx.date_pattern)}"
+    [
+      "#{task.text}, #{Map.fetch!(ctx.labels, task.type)}, " <>
+        "#{ctx.format.(task.start_date, ctx.date_pattern)} – " <>
+        "#{ctx.format.(TaskForm.display_end(task, ctx.unit), ctx.date_pattern)}",
+      task.blocked && ctx.labels.blocked,
+      task.restrictions > 0 && GanttEx.I18n.restrictions(task.restrictions, ctx.locale)
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(", ")
   end
 
   @doc "Renders the default summary of a task (tooltip and quick info body)."
@@ -749,6 +795,15 @@ defmodule GanttEx.Live.Components do
         <dd>{@ctx.format.(@task.deadline, @ctx.date_pattern)}</dd>
       <% end %>
     </dl>
+    <p :if={@task.blocked or @task.restrictions > 0} class="gx-summary-tags">
+      <span :if={@task.blocked} class="gx-tag gx-tag--blocked">
+        <.icon name={:lock_closed} /> {@ctx.labels.blocked}
+      </span>
+      <span :if={@task.restrictions > 0} class="gx-tag gx-tag--restricted">
+        <.icon name={:exclamation_triangle} />
+        {GanttEx.I18n.restrictions(@task.restrictions, @ctx.locale)}
+      </span>
+    </p>
     """
   end
 

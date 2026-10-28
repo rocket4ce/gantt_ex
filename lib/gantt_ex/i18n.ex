@@ -173,6 +173,8 @@ defmodule GanttEx.I18n do
         fnlt: gettext("Finish no later than"),
         mso: gettext("Must start on"),
         mfo: gettext("Must finish on"),
+        # status
+        blocked: gettext("Blocked"),
         # confirmation
         confirm_delete_task: gettext("Are you sure you want to delete this task?"),
         confirm_delete_subtasks: gettext("Its subtasks will be deleted too."),
@@ -241,6 +243,22 @@ defmodule GanttEx.I18n do
         "Are you sure you want to delete these %{count} tasks?",
         count
       )
+    end)
+  end
+
+  @doc """
+  Returns the translated number of open restrictions of a task.
+
+      iex> GanttEx.I18n.restrictions(1, "en")
+      "1 open restriction"
+
+      iex> GanttEx.I18n.restrictions(3, "en")
+      "3 open restrictions"
+  """
+  @spec restrictions(non_neg_integer(), locale()) :: String.t()
+  def restrictions(count, locale) do
+    with_locale(locale, fn ->
+      ngettext("%{count} open restriction", "%{count} open restrictions", count)
     end)
   end
 

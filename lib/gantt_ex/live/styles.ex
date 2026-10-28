@@ -51,7 +51,11 @@ defmodule GanttEx.Live.Styles do
         --gx-tooltip-bg: #0f172a;
         --gx-tooltip-text: #f8fafc;
         --gx-danger: #e11d48;
+        --gx-danger-strong: #be123c;
         --gx-danger-soft: rgba(225, 29, 72, 0.1);
+        --gx-warning: #f59e0b;
+        --gx-warning-strong: #b45309;
+        --gx-warning-soft: rgba(245, 158, 11, 0.14);
         --gx-backdrop: rgba(15, 23, 42, 0.45);
         --gx-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
         --gx-shadow-lg: 0 24px 48px -16px rgba(15, 23, 42, 0.35), 0 2px 8px rgba(15, 23, 42, 0.06);
@@ -84,6 +88,10 @@ defmodule GanttEx.Live.Styles do
         --gx-tooltip-bg: #020617;
         --gx-tooltip-text: #e2e8f0;
         --gx-backdrop: rgba(2, 6, 23, 0.65);
+        --gx-danger-strong: #fb7185;
+        --gx-danger-soft: rgba(244, 63, 94, 0.16);
+        --gx-warning-strong: #fbbf24;
+        --gx-warning-soft: rgba(251, 191, 36, 0.14);
         --gx-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
         --gx-shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.08);
       }
@@ -110,6 +118,10 @@ defmodule GanttEx.Live.Styles do
           --gx-tooltip-bg: #020617;
           --gx-tooltip-text: #e2e8f0;
           --gx-backdrop: rgba(2, 6, 23, 0.65);
+          --gx-danger-strong: #fb7185;
+          --gx-danger-soft: rgba(244, 63, 94, 0.16);
+          --gx-warning-strong: #fbbf24;
+          --gx-warning-soft: rgba(251, 191, 36, 0.14);
           --gx-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
           --gx-shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.08);
         }
@@ -711,6 +723,46 @@ defmodule GanttEx.Live.Styles do
       .gx-wbs {
         font-variant-numeric: tabular-nums;
         color: var(--gx-muted);
+      }
+
+      /* Blocked tasks and open restrictions, next to the task name */
+      .gx-flag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        flex: none;
+        height: 18px;
+        min-width: 18px;
+        font-size: 11px;
+        font-weight: 650;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+        border-radius: 999px;
+      }
+
+      .gx-flag .gx-icon {
+        width: 12px;
+        height: 12px;
+      }
+
+      .gx-flag--blocked {
+        color: var(--gx-danger-strong);
+        background: var(--gx-danger-soft);
+      }
+
+      .gx-flag--restricted {
+        padding: 0 6px 0 4px;
+        color: var(--gx-warning-strong);
+        background: var(--gx-warning-soft);
+      }
+
+      .gx-row--restricted {
+        box-shadow: inset 2px 0 0 var(--gx-warning);
+      }
+
+      .gx-row--blocked {
+        box-shadow: inset 2px 0 0 var(--gx-danger);
       }
 
       .gx-empty {
@@ -1327,6 +1379,52 @@ defmodule GanttEx.Live.Styles do
         transform: rotate(45deg);
       }
 
+      /* Blocked: hatched in the danger tone. Open restrictions: a dot on the corner */
+      .gx-bar--blocked .gx-bar-body::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: repeating-linear-gradient(
+          -45deg,
+          transparent 0 5px,
+          color-mix(in srgb, var(--gx-danger) 45%, transparent) 5px 7.5px
+        );
+        box-shadow: inset 0 0 0 1.5px var(--gx-danger);
+        pointer-events: none;
+      }
+
+      .gx-bar--blocked .gx-bar-text {
+        z-index: 1;
+      }
+
+      .gx-bar--milestone.gx-bar--blocked .gx-bar-body::after {
+        display: none;
+      }
+
+      .gx-bar--milestone.gx-bar--blocked .gx-bar-body::before {
+        border: 2px solid var(--gx-danger);
+      }
+
+      .gx-bar--restricted::before {
+        content: "";
+        position: absolute;
+        top: -3px;
+        left: -3px;
+        z-index: 4;
+        width: 9px;
+        height: 9px;
+        background: var(--gx-warning);
+        border-radius: 50%;
+        box-shadow: 0 0 0 2px var(--gx-bg);
+        pointer-events: none;
+      }
+
+      .gx-bar--milestone.gx-bar--restricted::before {
+        top: -4px;
+        left: calc(50% - 4.5px);
+      }
+
       .gx-bar--overdue .gx-bar-body {
         box-shadow: inset 0 0 0 2px var(--gx-danger), var(--gx-shadow);
       }
@@ -1439,6 +1537,49 @@ defmodule GanttEx.Live.Styles do
       .gx-summary dd {
         margin: 0;
         font-variant-numeric: tabular-nums;
+      }
+
+      .gx-summary-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin: 8px 0 0;
+      }
+
+      .gx-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px 2px 6px;
+        font-size: 11px;
+        font-weight: 600;
+        border-radius: 999px;
+      }
+
+      .gx-tag .gx-icon {
+        width: 12px;
+        height: 12px;
+      }
+
+      .gx-tag--blocked {
+        color: var(--gx-danger-strong);
+        background: var(--gx-danger-soft);
+      }
+
+      .gx-tag--restricted {
+        color: var(--gx-warning-strong);
+        background: var(--gx-warning-soft);
+      }
+
+      /* tooltips are dark in both themes */
+      .gx-tooltip .gx-tag--blocked {
+        color: #fda4af;
+        background: rgba(244, 63, 94, 0.2);
+      }
+
+      .gx-tooltip .gx-tag--restricted {
+        color: #fcd34d;
+        background: rgba(251, 191, 36, 0.16);
       }
 
       /* --------------------------------------------------------------- popups */

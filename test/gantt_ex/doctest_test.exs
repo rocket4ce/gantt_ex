@@ -28,4 +28,5 @@ defmodule GanttEx.DoctestTest do
   doctest GanttEx.Live.Components
   doctest GanttEx.Live.Columns
   doctest GanttEx.Live.Interaction
+  doctest GanttEx.Live.Icons
 end

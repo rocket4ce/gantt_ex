@@ -14,6 +14,13 @@ defmodule GanttEx.Task do
       its children) or `:milestone` (zero-duration event).
     * `:open` - whether the children are expanded initially.
     * `:readonly` - disables editing for this task.
+    * `:blocked` - the work cannot go on (shown with a lock in the grid and a
+      hatched bar). Defaults to `false`.
+    * `:restrictions` - the number of open restrictions: what has to be
+      released before the work can be done (materials, permits, a previous
+      trade...), as in the Last Planner System. Not to be confused with the
+      scheduling `:constraint_type`. A list (such as the open restrictions
+      themselves) counts its elements. Defaults to `0`.
     * `:color`, `:text_color`, `:progress_color` - optional CSS colors.
     * `:calendar_id` - the working-time calendar of the task (see `GanttEx.Calendar`).
     * `:constraint_type`, `:constraint_date` - scheduling constraint used by
@@ -49,6 +56,13 @@ defmodule GanttEx.Task do
 
       iex> GanttEx.Task.new(%{id: 1, progress: 50})
       {:error, {:invalid, :progress}}
+
+      iex> {:ok, task} = GanttEx.Task.new(%{"id" => 3, "blocked" => "true", "restrictions" => "2"})
+      iex> {task.blocked, task.restrictions}
+      {true, 2}
+
+      iex> GanttEx.Task.new(%{id: 4, restrictions: -1})
+      {:error, {:invalid, :restrictions}}
   """
 
   alias GanttEx.Dates
@@ -66,6 +80,8 @@ defmodule GanttEx.Task do
     :type,
     :open,
     :readonly,
+    :blocked,
+    :restrictions,
     :color,
     :text_color,
     :progress_color,
@@ -95,6 +111,8 @@ defmodule GanttEx.Task do
             type: :task,
             open: true,
             readonly: false,
+            blocked: false,
+            restrictions: 0,
             color: nil,
             text_color: nil,
             progress_color: nil,
@@ -136,6 +154,8 @@ defmodule GanttEx.Task do
           type: type(),
           open: boolean(),
           readonly: boolean(),
+          blocked: boolean(),
+          restrictions: non_neg_integer(),
           color: String.t() | nil,
           text_color: String.t() | nil,
           progress_color: String.t() | nil,
@@ -340,7 +360,8 @@ defmodule GanttEx.Task do
   defp cast_field(:calendar_id, value), do: {:ok, if(value == "", do: nil, else: value)}
   defp cast_field(:duration, value), do: cast_duration(value)
   defp cast_field(:progress, value), do: cast_progress(value)
-  defp cast_field(key, value) when key in [:open, :readonly], do: cast_boolean(value)
+  defp cast_field(key, value) when key in [:open, :readonly, :blocked], do: cast_boolean(value)
+  defp cast_field(:restrictions, value), do: cast_count(value)
 
   defp cast_field(key, value) when key in [:color, :text_color, :progress_color],
     do: cast_color(value)
@@ -360,6 +381,20 @@ defmodule GanttEx.Task do
   end
 
   defp cast_duration(_value), do: :error
+
+  defp cast_count(value) when value in [nil, ""], do: {:ok, 0}
+  defp cast_count(value) when is_integer(value) and value >= 0, do: {:ok, value}
+  defp cast_count(value) when is_float(value) and value >= 0, do: {:ok, round(value)}
+  defp cast_count(value) when is_list(value), do: {:ok, length(value)}
+
+  defp cast_count(value) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {count, ""} -> cast_count(count)
+      _ -> :error
+    end
+  end
+
+  defp cast_count(_value), do: :error
 
   defp cast_progress(nil), do: {:ok, 0.0}
 
