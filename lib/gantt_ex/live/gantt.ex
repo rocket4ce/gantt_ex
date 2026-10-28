@@ -776,7 +776,6 @@ defmodule GanttEx.Live.Gantt do
     %{
       definitions: definitions,
       values: values,
-      queries: a.filter_queries,
       visible: visible,
       matched: matched,
       total: Store.task_count(a.store),
@@ -1042,7 +1041,7 @@ defmodule GanttEx.Live.Gantt do
         can_redo={@undo and not @readonly and History.can_redo?(@history)}
         show_history={@undo and not @readonly}
         show_critical={@show_critical}
-        filters={@filtering.definitions != [] && @filtering}
+        filters={@filtering.definitions != [] && Map.put(@filtering, :queries, @filter_queries)}
         columns={@column_choices}
         popover={@popover}
       >
@@ -1338,14 +1337,15 @@ defmodule GanttEx.Live.Gantt do
     {:noreply, socket |> assign(filter_queries: %{}) |> put_filters(%{})}
   end
 
+  # Popovers do not change the rows: no need to lay out the chart again.
   def handle_event("toggle_popover", %{"popover" => popover}, socket) do
     popover = Enum.find([:filters, :columns], &(Atom.to_string(&1) == popover))
     open = if socket.assigns.popover == popover, do: nil, else: popover
-    {:noreply, socket |> assign(popover: open, quick_info_key: nil) |> prepare()}
+    {:noreply, socket |> assign(popover: open, quick_info_key: nil) |> apply_window()}
   end
 
   def handle_event("close_popover", _params, socket) do
-    {:noreply, socket |> assign(popover: nil) |> prepare()}
+    {:noreply, assign(socket, popover: nil)}
   end
 
   # -- events: row actions -----------------------------------------------------
@@ -2072,8 +2072,9 @@ defmodule GanttEx.Live.Gantt do
     a = socket.assigns
     values = Filter.normalize(values, filter_definitions(a, true))
 
+    # typing in the search of a filter only changes the panel
     if values == a.filter_state do
-      prepare(socket)
+      socket
     else
       notify(socket, %Event{gantt_id: a.id, type: :filters_changed, filters: values})
 
@@ -2373,7 +2374,7 @@ defmodule GanttEx.Live.Gantt do
         request_delete_selected(socket, row)
 
       "Escape" when not is_nil(a.popover) ->
-        socket |> assign(popover: nil) |> prepare()
+        assign(socket, popover: nil)
 
       "Escape" ->
         socket
