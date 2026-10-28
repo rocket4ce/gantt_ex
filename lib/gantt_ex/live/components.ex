@@ -920,6 +920,11 @@ defmodule GanttEx.Live.Components do
   @doc "Renders the quick info popup shown below a selected bar."
   attr :ctx, :map, required: true
   attr :bar, :map, required: true
+
+  attr :offset, :any,
+    default: nil,
+    doc: "where the bar was clicked, from its start: the left of the popup (`nil` for the start)"
+
   attr :editable, :boolean, default: true
 
   def quick_info(assigns) do
@@ -929,7 +934,7 @@ defmodule GanttEx.Live.Components do
       class="gx-popup gx-quick-info"
       role="dialog"
       aria-label={@bar.task.text}
-      style={"left: #{px(max(@bar.x, 0))}; top: #{px(@bar.y + @bar.height + 10)}"}
+      style={"left: #{px(quick_info_left(@bar, @offset))}; top: #{px(@bar.y + @bar.height + 10)}"}
       phx-click-away="close_quick_info"
       phx-target={@ctx.myself}
     >
@@ -969,6 +974,9 @@ defmodule GanttEx.Live.Components do
     </div>
     """
   end
+
+  defp quick_info_left(bar, offset) when is_number(offset), do: max(bar.x + offset, 0)
+  defp quick_info_left(bar, _offset), do: max(bar.x, 0)
 
   @doc "Renders the lightbox: the task editor dialog."
   attr :ctx, :map, required: true

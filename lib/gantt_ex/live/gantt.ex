@@ -275,6 +275,7 @@ defmodule GanttEx.Live.Gantt do
        selection: MapSet.new(),
        selected_link: nil,
        quick_info_key: nil,
+       quick_info_offset: nil,
        lightbox_state: nil,
        link_editor: nil,
        confirm: nil,
@@ -962,6 +963,7 @@ defmodule GanttEx.Live.Gantt do
                 :if={@quick_info_bar}
                 ctx={@ctx}
                 bar={@quick_info_bar}
+                offset={@quick_info_offset}
                 editable={not @readonly and not @quick_info_bar.task.readonly}
               />
             </div>
@@ -1016,7 +1018,13 @@ defmodule GanttEx.Live.Gantt do
 
   @impl true
   def handle_event("select", %{"key" => key} = params, socket) do
-    {:noreply, socket |> select_task(key, params["source"] == "bar") |> prepare()}
+    from_bar? = params["source"] == "bar"
+
+    {:noreply,
+     socket
+     |> select_task(key, from_bar?)
+     |> assign(quick_info_offset: if(from_bar?, do: Interaction.number(params["offset"])))
+     |> prepare()}
   end
 
   def handle_event("toggle", %{"key" => key}, socket) do

@@ -13,6 +13,7 @@ defmodule GanttEx.Live.Hook do
     * dragging on the timeline to create a task, or to pan the chart
     * resizing grid columns and the grid itself
     * double click to open the lightbox
+    * opening the quick info where the bar was clicked
     * Ctrl/Cmd+click and Shift+click selection, and moving the selected bars together
     * undo / redo keyboard shortcuts (they need modifier keys)
     * fullscreen, print, scrolling and file downloads requested by the server
@@ -35,6 +36,7 @@ defmodule GanttEx.Live.Hook do
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Gantt">
       const DRAG_THRESHOLD = 4
       const MIN_BAR = 6
+      const POPUP_MARGIN = 8
 
       const px = (el, name) => parseFloat(el.style.getPropertyValue(name)) || 0
       const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
@@ -59,8 +61,15 @@ defmodule GanttEx.Live.Hook do
               this.suppressClick = false
               return
             }
+            // A plain click on a bar: the quick info opens where the bar was clicked.
+            if (!(e.ctrlKey || e.metaKey || e.shiftKey)) {
+              const bar = e.target.closest("[data-gx-bar]")
+              if (bar && !e.target.closest(".gx-popup")) {
+                bar.setAttribute("phx-value-offset", Math.round(e.clientX - bar.getBoundingClientRect().left))
+              }
+              return
+            }
             // Ctrl/Cmd+click and Shift+click extend the selection (phx-click has no modifiers).
-            if (!(e.ctrlKey || e.metaKey || e.shiftKey)) return
             if (e.target.closest("input, select, textarea, button, a, .gx-popup")) return
             const el = e.target.closest("[data-gx-bar], [data-gx-row]")
             if (!el) return
@@ -107,15 +116,21 @@ defmodule GanttEx.Live.Hook do
           this.viewport.addEventListener("scroll", this.onScroll, {passive: true})
           window.addEventListener("resize", this.onResize)
           this.reportViewport(true)
+
+          // The visible part of the timeline changes with the page layout too (side panels...)
+          this.resizeObserver = new ResizeObserver(() => this.fitQuickInfo())
+          this.resizeObserver.observe(this.viewport)
         },
 
         updated() {
           this.viewport = this.el.querySelector("[data-gx-viewport]")
           this.reportViewport(false)
+          this.fitQuickInfo()
         },
 
         destroyed() {
           this.stopTracking && this.stopTracking()
+          this.resizeObserver.disconnect()
           window.removeEventListener("resize", this.onResize)
         },
 
@@ -448,6 +463,27 @@ defmodule GanttEx.Live.Hook do
           if (e.target.closest("input, select, textarea, button, .gx-popup")) return
           const el = e.target.closest("[data-gx-bar], [data-gx-row]")
           if (el) this.push("gx:dblclick", {key: el.dataset.gxBar || el.dataset.gxRow})
+        },
+
+        // The quick info is rendered with its left corner where the bar was clicked. Keep it in
+        // the visible part of the timeline (the grid covers the chart scrolled under it): open it
+        // to the left of that point when there is no room on the right, else move it in.
+        fitQuickInfo() {
+          const popup = this.el.querySelector(".gx-quick-info")
+          if (!popup) return
+          this.el.style.removeProperty("--gx-quick-info-dx")
+          const vp = this.viewport
+          const grid = vp.querySelector("[data-gx-grid]")
+          const box = vp.getBoundingClientRect()
+          const min = Math.max(box.left, grid ? grid.getBoundingClientRect().right : -Infinity) + POPUP_MARGIN
+          const max = box.left + vp.clientWidth - POPUP_MARGIN
+          // Layout box: the opening animation scales the popup
+          const left = popup.offsetParent.getBoundingClientRect().left + popup.offsetLeft
+          const width = popup.offsetWidth
+          const dx = left >= min && left + width <= max ? 0
+            : left - width >= min && left <= max ? -width
+            : clamp(left, min, Math.max(min, max - width)) - left
+          if (dx) this.el.style.setProperty("--gx-quick-info-dx", `${Math.round(dx)}px`)
         },
 
         toggleFullscreen() {

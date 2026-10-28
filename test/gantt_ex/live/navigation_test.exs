@@ -21,6 +21,19 @@ defmodule GanttEx.Live.NavigationTest do
     refute has_element?(view, "#gantt-quick-info")
   end
 
+  test "the quick info opens where the bar was clicked", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn)
+    bar_x = style_px(view, "#gantt-bar-3", "--gx-x")
+
+    # The hook sends where the bar was clicked, from its start
+    view |> element("#gantt-bar-3") |> render_click(%{"offset" => "40"})
+    assert style_px(view, "#gantt-quick-info", "left") == bar_x + 40
+
+    # Without it (no JavaScript, or a forged value) the popup opens at the start of the bar
+    view |> element("#gantt-bar-3") |> render_click(%{"offset" => "wide"})
+    assert style_px(view, "#gantt-quick-info", "left") == bar_x
+  end
+
   test "branches can be collapsed and expanded", %{conn: conn} do
     {:ok, view, _html} = mount_gantt(conn)
 
@@ -147,5 +160,18 @@ defmodule GanttEx.Live.NavigationTest do
 
     run_in_parent(view, fn -> GanttEx.Live.Gantt.select("gantt", 3) end)
     assert has_element?(view, "#gantt-row-3.gx-row--selected")
+  end
+
+  defp style_px(view, selector, property) do
+    [style] =
+      view
+      |> element(selector)
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.attribute("style")
+
+    [_, value] = Regex.run(~r/(?:^|;)\s*#{Regex.escape(property)}:\s*(-?[\d.]+)px/, style)
+    {number, ""} = Float.parse(value)
+    number
   end
 end

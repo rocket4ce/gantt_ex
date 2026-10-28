@@ -1456,6 +1456,11 @@ defmodule GanttEx.Live.Styles do
         animation: gx-pop 0.16s var(--gx-ease);
       }
 
+      /* Moved by the hook into the visible part of the timeline */
+      .gx-quick-info {
+        translate: var(--gx-quick-info-dx, 0px) 0;
+      }
+
       .gx-popup .gx-summary dt {
         color: var(--gx-muted);
         opacity: 1;
