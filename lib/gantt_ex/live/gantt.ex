@@ -165,6 +165,7 @@ defmodule GanttEx.Live.Gantt do
     Dates,
     Event,
     Export,
+    Filter,
     History,
     I18n,
     Layout,
@@ -228,6 +229,7 @@ defmodule GanttEx.Live.Gantt do
     class: nil,
     task_class: nil,
     filter: nil,
+    filters: [:search, :status, :type, :dates],
     notify: nil,
     column: [],
     task_text: [],
@@ -292,7 +294,15 @@ defmodule GanttEx.Live.Gantt do
        history: History.new(),
        show_critical: nil,
        analysis: nil,
-       loading: MapSet.new()
+       loading: MapSet.new(),
+       popover: nil,
+       # filters: the normalized values, the last `:filter_values` received and
+       # what is typed in the searchable filters
+       filter_state: %{},
+       filter_attr: :unset,
+       filter_queries: %{},
+       filter_cache: nil,
+       search_cache: nil
      )}
   end
 
@@ -304,10 +314,11 @@ defmodule GanttEx.Live.Gantt do
   def update(assigns, socket) do
     socket =
       socket
-      |> assign(Map.drop(assigns, [:tasks, :links, :zoom_levels]))
+      |> assign(Map.drop(assigns, [:tasks, :links, :zoom_levels, :filter_values]))
       |> assign_defaults(assigns)
       |> load_data(assigns)
       |> assign_i18n()
+      |> assign_filter_values(assigns)
       |> assign_zoom()
       |> prepare()
 
@@ -416,6 +427,27 @@ defmodule GanttEx.Live.Gantt do
     end
   end
 
+  # A new `:filter_values` replaces what the user selected; the same one again
+  # (the parent re-rendering) keeps it.
+  defp assign_filter_values(socket, assigns) do
+    case assigns do
+      %{filter_values: values} when values != socket.assigns.filter_attr ->
+        assign(socket,
+          filter_attr: values,
+          filter_state: Filter.normalize(values, filter_definitions(socket.assigns, true)),
+          filter_queries: %{}
+        )
+
+      _ ->
+        socket
+    end
+  end
+
+  # Values are kept against every status, so a critical filter survives
+  # hiding the critical path (it is ignored meanwhile).
+  defp filter_definitions(a, critical),
+    do: Filter.definitions(a.filters, a.labels, critical: critical)
+
   defp assign_zoom(%{assigns: assigns} = socket) do
     if assigns.zoom != assigns.zoom_attr or is_nil(assigns.zoom_name) do
       assign(socket,
@@ -467,12 +499,13 @@ defmodule GanttEx.Live.Gantt do
     show_critical = if is_nil(a.show_critical), do: a.critical_path, else: a.show_critical
     analysis = analysis(a, show_critical)
     a = Map.merge(a, %{selection: selection, analysis: analysis, show_critical: show_critical})
+    filtering = run_filters(a, today)
 
     rows =
       a.store
       |> Store.rows(
         collapsed: a.collapsed,
-        filter: a.filter,
+        visible: filtering.visible,
         sort: a.sort,
         group_by: group_spec(a)
       )
@@ -514,6 +547,10 @@ defmodule GanttEx.Live.Gantt do
       show_critical: show_critical,
       analysis: analysis,
       analysis_cache: analysis && {a.store, analysis},
+      filtering: filtering,
+      filter_cache: filtering.cache,
+      search_cache: filtering.search_cache,
+      reorderable: reorderable?(a, filtering),
       level: level,
       rows: rows,
       bars: bars,
@@ -635,6 +672,67 @@ defmodule GanttEx.Live.Gantt do
       nil -> to_string(id)
       resource -> resource.text
     end
+  end
+
+  # Filters run again only when the data or the values change. Searching uses
+  # the normalized text of the tasks, kept until they are renamed.
+  defp run_filters(a, today) do
+    definitions = filter_definitions(a, a.show_critical)
+    values = Filter.normalize(a.filter_state, definitions)
+    statuses = Map.get(values, :status, [])
+
+    search_cache =
+      case a.search_cache do
+        {store, _index, _wbs} = cache when store == a.store ->
+          cache
+
+        cache when is_map_key(values, :search) ->
+          previous = if cache, do: elem(cache, 1), else: %{}
+          {a.store, Filter.search_index(a.store, previous), Store.wbs_codes(a.store)}
+
+        cache ->
+          cache
+      end
+
+    key =
+      {a.store, values, a.filter, :critical in statuses and a.analysis,
+       :overdue in statuses and today}
+
+    {visible, matched} =
+      case a.filter_cache do
+        {^key, result} ->
+          result
+
+        _ ->
+          {_store, index, wbs} = search_cache || {nil, %{}, %{}}
+
+          Filter.visible(a.store, definitions, values, %{
+            today: today,
+            unit: a.duration_unit,
+            analysis: a.analysis,
+            index: index,
+            wbs: wbs,
+            filter: a.filter
+          })
+      end
+
+    %{
+      definitions: definitions,
+      values: values,
+      queries: a.filter_queries,
+      visible: visible,
+      matched: matched,
+      total: Store.task_count(a.store),
+      active: values != %{},
+      cache: {key, {visible, matched}},
+      search_cache: search_cache
+    }
+  end
+
+  # Rows can only be dragged when they are shown in tree order.
+  defp reorderable?(a, filtering) do
+    a.reorder and not a.readonly and is_nil(a.sort) and is_nil(filtering.visible) and
+      a.group_by in [nil, false]
   end
 
   # CPM runs when something shows it, and only again when the store changes.
@@ -863,12 +961,7 @@ defmodule GanttEx.Live.Gantt do
       data-gx-snap={@snap_px}
       data-gx-readonly={to_string(@readonly)}
       data-gx-drag-create={to_string(@drag_create and not @readonly)}
-      data-gx-reorder={
-        to_string(
-          @reorder and not @readonly and is_nil(@sort) and is_nil(@filter) and
-            @group_by in [nil, false]
-        )
-      }
+      data-gx-reorder={to_string(@reorderable)}
       data-gx-window={@window}
       phx-hook={@hook}
       phx-target={@myself}
@@ -884,9 +977,19 @@ defmodule GanttEx.Live.Gantt do
         can_redo={@undo and not @readonly and History.can_redo?(@history)}
         show_history={@undo and not @readonly}
         show_critical={@show_critical}
+        filters={@filtering.definitions != [] && @filtering}
+        popover={@popover}
       >
         {render_slot(@toolbar_actions)}
       </.toolbar>
+
+      <.filter_status
+        :if={@toolbar and @filtering.active}
+        ctx={@ctx}
+        filters={@filtering}
+        matched={@filtering.matched}
+        total={@filtering.total}
+      />
 
       <div
         id={"#{@id}-viewport"}
@@ -929,7 +1032,21 @@ defmodule GanttEx.Live.Gantt do
               />
               <div :if={@spacer_bottom > 0} class="gx-spacer" style={"height: #{@spacer_bottom}px"}>
               </div>
-              <div :if={@rows == []} class="gx-empty">{@labels.no_tasks}</div>
+              <div :if={@rows == [] and not @filtering.active} class="gx-empty">
+                {@labels.no_tasks}
+              </div>
+              <div :if={@rows == [] and @filtering.active} class="gx-empty">
+                <p>{@labels.no_matches}</p>
+                <button
+                  id={"#{@id}-empty-clear-filters"}
+                  type="button"
+                  class="gx-btn"
+                  phx-click="filters_clear"
+                  phx-target={@myself}
+                >
+                  {@labels.clear_filters}
+                </button>
+              </div>
               <div
                 id={"#{@id}-drop-marker"}
                 class="gx-drop-marker"
@@ -1101,6 +1218,69 @@ defmodule GanttEx.Live.Gantt do
     do: {:noreply, socket |> assign(quick_info_key: nil) |> prepare()}
 
   def handle_event("dismiss_notice", _params, socket), do: {:noreply, assign(socket, notice: nil)}
+
+  # -- events: filters ---------------------------------------------------------
+
+  def handle_event("filter_search", %{"search" => search}, socket) do
+    {:noreply, put_filters(socket, Map.put(socket.assigns.filter_state, :search, search))}
+  end
+
+  def handle_event("filters_change", params, socket) do
+    a = socket.assigns
+    definitions = filter_definitions(a, true)
+    panel = params |> Map.get("filters", %{}) |> Map.put("search", a.filter_state[:search])
+
+    queries =
+      for definition <- definitions,
+          definition.searchable,
+          query = params["queries"][to_string(definition.id)],
+          is_binary(query),
+          into: a.filter_queries,
+          do: {definition.id, String.slice(query, 0, 100)}
+
+    {:noreply, socket |> assign(filter_queries: queries) |> put_filters(panel)}
+  end
+
+  def handle_event("filter_remove", %{"filter" => id, "value" => key}, socket) do
+    state = socket.assigns.filter_state
+
+    state =
+      case find_filter(socket.assigns, id) do
+        %{id: id} -> Map.update(state, id, [], fn values -> remove_option(values, key) end)
+        nil -> state
+      end
+
+    {:noreply, put_filters(socket, state)}
+  end
+
+  def handle_event("filter_clear", %{"filter" => id}, socket) do
+    a = socket.assigns
+
+    case find_filter(a, id) do
+      nil ->
+        {:noreply, socket}
+
+      %{id: id} ->
+        socket
+        |> assign(filter_queries: Map.delete(a.filter_queries, id))
+        |> put_filters(Map.delete(a.filter_state, id))
+        |> then(&{:noreply, &1})
+    end
+  end
+
+  def handle_event("filters_clear", _params, socket) do
+    {:noreply, socket |> assign(filter_queries: %{}) |> put_filters(%{})}
+  end
+
+  def handle_event("toggle_popover", %{"popover" => popover}, socket) do
+    popover = Enum.find([:filters, :columns], &(Atom.to_string(&1) == popover))
+    open = if socket.assigns.popover == popover, do: nil, else: popover
+    {:noreply, socket |> assign(popover: open, quick_info_key: nil) |> prepare()}
+  end
+
+  def handle_event("close_popover", _params, socket) do
+    {:noreply, socket |> assign(popover: nil) |> prepare()}
+  end
 
   # -- events: lightbox --------------------------------------------------------
 
@@ -1499,7 +1679,7 @@ defmodule GanttEx.Live.Gantt do
 
     socket =
       with_editable_task(socket, key, fn task ->
-        with true <- a.reorder and is_nil(a.sort) and is_nil(a.filter),
+        with true <- a.reorderable,
              %Task{} = target <- Store.task_by_key(a.store, target_key),
              true <- target.id != task.id,
              {parent, index} <- Interaction.drop_position(a.store, task, target, position) do
@@ -1577,6 +1757,37 @@ defmodule GanttEx.Live.Gantt do
   def handle_event("gx:dblclick", %{"key" => key}, socket) do
     {:noreply, socket |> open_lightbox(key) |> prepare()}
   end
+
+  # -- helpers: filters --------------------------------------------------------
+
+  # Applies new filter values and tells the parent, which may persist them.
+  # The results start at the top of the chart.
+  defp put_filters(socket, values) do
+    a = socket.assigns
+    values = Filter.normalize(values, filter_definitions(a, true))
+
+    if values == a.filter_state do
+      prepare(socket)
+    else
+      notify(socket, %Event{gantt_id: a.id, type: :filters_changed, filters: values})
+
+      socket
+      |> assign(
+        filter_state: values,
+        quick_info_key: nil,
+        editing: nil,
+        viewport: %{a.viewport | top: 0}
+      )
+      |> push_event("gantt_ex:scroll", %{id: a.id, y: 0, height: 0})
+      |> prepare()
+    end
+  end
+
+  defp find_filter(a, id),
+    do: a |> filter_definitions(true) |> Enum.find(&(to_string(&1.id) == id))
+
+  defp remove_option(values, key),
+    do: Enum.reject(List.wrap(values), &(Filter.option_key(&1) == key))
 
   # -- helpers: tasks ----------------------------------------------------------
 
@@ -1854,6 +2065,9 @@ defmodule GanttEx.Live.Gantt do
 
       key when key in ["Delete", "Backspace"] ->
         request_delete_selected(socket, row)
+
+      "Escape" when not is_nil(a.popover) ->
+        socket |> assign(popover: nil) |> prepare()
 
       "Escape" ->
         socket

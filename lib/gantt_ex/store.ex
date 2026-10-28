@@ -748,6 +748,9 @@ defmodule GanttEx.Store do
     * `:filter` - a 1-arity function; only matching tasks (and their ancestors,
       to keep the tree readable) are returned. Collapsed branches are expanded
       while filtering.
+    * `:visible` - a `MapSet` of the ids of the tasks to show, such as the
+      ones returned by `GanttEx.Filter.visible/4` (which include the
+      ancestors). Expanded like `:filter`, and combined with it.
     * `:sort` - `{field, :asc | :desc}` to sort siblings by a task field or a
       `:meta` key. The tree structure is preserved.
     * `:group_by` - `{group_fun, label_fun}` to group tasks (projects with
@@ -773,12 +776,22 @@ defmodule GanttEx.Store do
       ["A", "B", "child"]
       iex> store |> GanttEx.Store.rows(filter: &(&1.text == "child")) |> Enum.map(& &1.key)
       ["1", "2"]
+      iex> store |> GanttEx.Store.rows(visible: MapSet.new([3])) |> Enum.map(& &1.key)
+      ["3"]
   """
   @spec rows(t(), keyword()) :: [row()]
   def rows(%__MODULE__{} = store, opts \\ []) do
     filter = Keyword.get(opts, :filter)
-    visible = if filter, do: matching_with_ancestors(store, filter)
-    collapsed = if filter, do: MapSet.new(), else: Keyword.get(opts, :collapsed, MapSet.new())
+
+    visible =
+      case {filter && matching_with_ancestors(store, filter), Keyword.get(opts, :visible)} do
+        {nil, visible} -> visible
+        {matching, nil} -> matching
+        {matching, visible} -> MapSet.intersection(matching, visible)
+      end
+
+    collapsed =
+      if visible, do: MapSet.new(), else: Keyword.get(opts, :collapsed, MapSet.new())
 
     ctx = %{
       store: store,
@@ -934,13 +947,19 @@ defmodule GanttEx.Store do
     end)
   end
 
+  # Each ancestor is added once: the walk stops at the first one already in.
   defp matching_with_ancestors(store, filter) do
-    store
-    |> tasks()
-    |> Enum.filter(filter)
-    |> Enum.reduce(MapSet.new(), fn task, set ->
-      Enum.reduce([task.id | ancestor_ids(store, task.id)], set, &MapSet.put(&2, &1))
+    Enum.reduce(store.tasks, MapSet.new(), fn {_id, task}, set ->
+      if filter.(task), do: put_with_ancestors(store, task.id, set), else: set
     end)
+  end
+
+  defp put_with_ancestors(_store, nil, set), do: set
+
+  defp put_with_ancestors(store, id, set) do
+    if MapSet.member?(set, id),
+      do: set,
+      else: put_with_ancestors(store, store.tasks[id].parent, MapSet.put(set, id))
   end
 
   defp sort_siblings(tasks, nil), do: tasks

@@ -36,6 +36,12 @@ defmodule GanttEx.Event do
     * `:task_selected` - the user selected a task (`:task`). `:selection` holds
       the ids of every selected task (Ctrl/Cmd+click and Shift+click select
       several).
+    * `:filters_changed` - the user changed the search or the filters.
+      `:filters` holds the normalized values (see `GanttEx.Filter`), which
+      can be given back as `:filter_values` to restore them:
+
+          %{search: "slab", status: [:blocked], responsible: ["uuid-1", nil],
+            dates: %{from: ~D[2025-01-01], to: ~D[2025-01-31]}}
 
   `:gantt_id` is the `id` of the component that sent the event, which allows
   several charts in the same LiveView.
@@ -43,7 +49,18 @@ defmodule GanttEx.Event do
 
   alias GanttEx.{Link, Store, Task}
 
-  defstruct [:gantt_id, :type, :task, :link, :changes, :parent, :index, :siblings, :selection]
+  defstruct [
+    :gantt_id,
+    :type,
+    :task,
+    :link,
+    :changes,
+    :parent,
+    :index,
+    :siblings,
+    :selection,
+    :filters
+  ]
 
   @type type ::
           :task_created
@@ -55,6 +72,7 @@ defmodule GanttEx.Event do
           | :link_deleted
           | :task_selected
           | :branch_requested
+          | :filters_changed
 
   @type t :: %__MODULE__{
           gantt_id: String.t(),
@@ -65,7 +83,8 @@ defmodule GanttEx.Event do
           parent: Task.id() | nil,
           index: non_neg_integer() | nil,
           siblings: [Task.id()] | nil,
-          selection: [Task.id()] | nil
+          selection: [Task.id()] | nil,
+          filters: GanttEx.Filter.values() | nil
         }
 
   @doc """

@@ -38,6 +38,13 @@ defmodule GanttEx.Live.Components do
   attr :can_undo, :boolean, default: false
   attr :can_redo, :boolean, default: false
   attr :show_critical, :boolean, default: false
+
+  attr :filters, :map,
+    default: nil,
+    doc:
+      "`%{definitions, values, queries}` for the search and the filter panel, `nil` to hide them"
+
+  attr :popover, :atom, default: nil, doc: "the open popover: `:filters`, `:columns` or `nil`"
   slot :inner_block
 
   def toolbar(assigns) do
@@ -178,6 +185,18 @@ defmodule GanttEx.Live.Components do
 
       <div class="gx-toolbar-spacer"></div>
 
+      <.search_box
+        :if={@filters && Enum.any?(@filters.definitions, &(&1.kind == :search))}
+        ctx={@ctx}
+        value={@filters.values[:search]}
+      />
+      <.filter_menu
+        :if={@filters && Enum.any?(@filters.definitions, &(&1.kind != :search))}
+        ctx={@ctx}
+        filters={@filters}
+        open={@popover == :filters}
+      />
+
       {render_slot(@inner_block)}
 
       <details :if={@export_formats != []} id={"#{@ctx.id}-export"} class="gx-menu">
@@ -226,6 +245,455 @@ defmodule GanttEx.Live.Components do
       </button>
     </div>
     """
+  end
+
+  # -- filters -----------------------------------------------------------------
+
+  @doc "Renders the search input of the toolbar (see `GanttEx.Filter`)."
+  attr :ctx, :map, required: true
+  attr :value, :string, default: nil
+
+  def search_box(assigns) do
+    ~H"""
+    <form
+      id={"#{@ctx.id}-search"}
+      class={["gx-search", @value && "gx-search--active"]}
+      role="search"
+      phx-change="filter_search"
+      phx-submit="filter_search"
+      phx-target={@ctx.myself}
+    >
+      <.icon name={:magnifying_glass} class="gx-search-icon" />
+      <input
+        id={"#{@ctx.id}-search-input"}
+        type="search"
+        name="search"
+        value={@value}
+        class="gx-search-input"
+        placeholder={@ctx.labels.search_tasks}
+        aria-label={@ctx.labels.search_tasks}
+        autocomplete="off"
+        spellcheck="false"
+        phx-debounce="300"
+      />
+      <button
+        :if={@value}
+        id={"#{@ctx.id}-search-clear"}
+        type="button"
+        class="gx-search-clear"
+        title={@ctx.labels.clear_search}
+        aria-label={@ctx.labels.clear_search}
+        phx-click={
+          JS.push("filter_clear", value: %{filter: "search"}, target: @ctx.myself)
+          |> JS.focus(to: "##{@ctx.id}-search-input")
+        }
+      >
+        <.icon name={:x_mark} />
+      </button>
+    </form>
+    """
+  end
+
+  @doc """
+  Renders the "Filters" toolbar button and its panel. `filters` holds the
+  `:definitions` and the normalized `:values` (see `GanttEx.Filter`), and the
+  `:queries` typed in the searchable filters.
+  """
+  attr :ctx, :map, required: true
+  attr :filters, :map, required: true
+  attr :open, :boolean, default: false
+
+  def filter_menu(assigns) do
+    assigns =
+      assign(assigns,
+        active: map_size(Map.delete(assigns.filters.values, :search)),
+        panel: Enum.reject(assigns.filters.definitions, &(&1.kind == :search))
+      )
+
+    ~H"""
+    <div
+      class="gx-popover-anchor"
+      phx-click-away={@open && JS.push("close_popover", target: @ctx.myself)}
+    >
+      <button
+        id={"#{@ctx.id}-filters-toggle"}
+        type="button"
+        class={["gx-btn", (@open or @active > 0) && "gx-btn--active"]}
+        aria-haspopup="dialog"
+        aria-expanded={to_string(@open)}
+        aria-controls={"#{@ctx.id}-filters"}
+        phx-click="toggle_popover"
+        phx-value-popover="filters"
+        phx-target={@ctx.myself}
+      >
+        <.icon name={:funnel} />
+        <span>{@ctx.labels.filters}</span>
+        <span
+          :if={@active > 0}
+          class="gx-badge"
+          title={GanttEx.I18n.active_filters(@active, @ctx.locale)}
+        >
+          {@active}
+        </span>
+      </button>
+      <div
+        :if={@open}
+        id={"#{@ctx.id}-filters"}
+        class="gx-popover gx-filters"
+        role="dialog"
+        aria-label={@ctx.labels.filters}
+        phx-mounted={JS.focus_first(to: "##{@ctx.id}-filters-form")}
+        phx-window-keydown={
+          JS.push("close_popover", target: @ctx.myself)
+          |> JS.focus(to: "##{@ctx.id}-filters-toggle")
+        }
+        phx-key="Escape"
+      >
+        <header class="gx-popover-header">
+          <h2 class="gx-popover-title">{@ctx.labels.filters}</h2>
+          <button
+            :if={@active > 0}
+            id={"#{@ctx.id}-filters-clear"}
+            type="button"
+            class="gx-text-btn"
+            phx-click="filters_clear"
+            phx-target={@ctx.myself}
+          >
+            {@ctx.labels.clear_filters}
+          </button>
+          <button
+            type="button"
+            class="gx-btn gx-btn--icon gx-btn--small"
+            aria-label={@ctx.labels.close}
+            phx-click={
+              JS.push("close_popover", target: @ctx.myself)
+              |> JS.focus(to: "##{@ctx.id}-filters-toggle")
+            }
+          >
+            <.icon name={:x_mark} />
+          </button>
+        </header>
+        <form
+          id={"#{@ctx.id}-filters-form"}
+          class="gx-filters-form"
+          phx-change="filters_change"
+          phx-submit="filters_change"
+          phx-target={@ctx.myself}
+        >
+          <.filter_field
+            :for={definition <- @panel}
+            ctx={@ctx}
+            definition={definition}
+            value={Map.get(@filters.values, definition.id)}
+            query={Map.get(@filters.queries, definition.id, "")}
+          />
+        </form>
+      </div>
+    </div>
+    """
+  end
+
+  attr :ctx, :map, required: true
+  attr :definition, :map, required: true
+  attr :value, :any, default: nil
+  attr :query, :string, default: ""
+
+  defp filter_field(%{definition: %{kind: :dates}} = assigns) do
+    assigns =
+      assign(assigns,
+        dom_id: filter_dom_id(assigns.ctx, assigns.definition),
+        invalid: GanttEx.Filter.invalid_range?(assigns.value)
+      )
+
+    ~H"""
+    <fieldset id={@dom_id} class="gx-filter gx-filter--dates">
+      <legend class="gx-filter-legend">
+        <span>{@definition.label}</span>
+        <.filter_clear :if={@value} ctx={@ctx} definition={@definition} />
+      </legend>
+      <div class="gx-filter-dates">
+        <label class="gx-field" for={"#{@dom_id}-from"}>
+          <span>{@ctx.labels.from}</span>
+          <input
+            id={"#{@dom_id}-from"}
+            type="date"
+            name={"filters[#{@definition.id}][from]"}
+            value={@value && @value.from && Date.to_iso8601(@value.from)}
+            class="gx-input gx-input--small"
+          />
+        </label>
+        <label class="gx-field" for={"#{@dom_id}-to"}>
+          <span>{@ctx.labels.to}</span>
+          <input
+            id={"#{@dom_id}-to"}
+            type="date"
+            name={"filters[#{@definition.id}][to]"}
+            value={@value && @value.to && Date.to_iso8601(@value.to)}
+            class={["gx-input gx-input--small", @invalid && "gx-input--invalid"]}
+            aria-invalid={to_string(@invalid)}
+          />
+        </label>
+      </div>
+      <p :if={@invalid} class="gx-error">{@ctx.labels.end_before_start}</p>
+    </fieldset>
+    """
+  end
+
+  # Statuses and types: checkable chips
+  defp filter_field(%{definition: %{kind: kind}} = assigns) when kind in [:status, :type] do
+    assigns =
+      assign(assigns,
+        dom_id: filter_dom_id(assigns.ctx, assigns.definition),
+        selected: MapSet.new(List.wrap(assigns.value), &GanttEx.Filter.option_key/1)
+      )
+
+    ~H"""
+    <fieldset id={@dom_id} class="gx-filter">
+      <legend class="gx-filter-legend">
+        <span>{@definition.label}</span>
+        <.filter_clear :if={@value} ctx={@ctx} definition={@definition} />
+      </legend>
+      <input type="hidden" name={"filters[#{@definition.id}][]"} value="" />
+      <div class="gx-chips">
+        <label
+          :for={option <- @definition.options}
+          id={"#{@dom_id}-#{option.key}"}
+          class={["gx-chip-check", MapSet.member?(@selected, option.key) && "gx-chip-check--on"]}
+        >
+          <input
+            type="checkbox"
+            name={"filters[#{@definition.id}][]"}
+            value={option.key}
+            checked={MapSet.member?(@selected, option.key)}
+          />
+          <span
+            :if={@definition.kind == :type}
+            class={["gx-type-dot", "gx-type-dot--#{option.key}"]}
+          ></span>
+          <.option_visual option={option} />
+          <span>{option.label}</span>
+        </label>
+      </div>
+    </fieldset>
+    """
+  end
+
+  # Custom filters: a combobox with removable chips, a search input and the options
+  defp filter_field(%{definition: %{kind: :options}} = assigns) do
+    definition = assigns.definition
+    selected = List.wrap(assigns.value)
+    selected_keys = MapSet.new(selected, &GanttEx.Filter.option_key/1)
+    query = if definition.searchable, do: assigns.query, else: ""
+    {shown, more} = GanttEx.Filter.search_options(definition, query, 50)
+    shown_keys = MapSet.new(shown, & &1.key)
+
+    assigns =
+      assign(assigns,
+        dom_id: filter_dom_id(assigns.ctx, definition),
+        chips: Enum.filter(definition.options, &MapSet.member?(selected_keys, &1.key)),
+        selected_keys: selected_keys,
+        # selected options filtered out of the list keep being submitted
+        kept: Enum.reject(selected_keys, &MapSet.member?(shown_keys, &1)),
+        shown: shown,
+        more: more,
+        input_type: if(definition.multiple, do: "checkbox", else: "radio")
+      )
+
+    ~H"""
+    <fieldset
+      id={@dom_id}
+      class={["gx-filter gx-combobox", @definition.searchable && "gx-combobox--searchable"]}
+    >
+      <legend class="gx-filter-legend">
+        <span>{@definition.label}</span>
+        <.filter_clear :if={@value} ctx={@ctx} definition={@definition} />
+      </legend>
+      <div :if={@chips != []} class="gx-chips gx-combobox-chips">
+        <span :for={option <- @chips} id={"#{@dom_id}-chip-#{dom_key(option.key)}"} class="gx-chip">
+          <.option_visual option={option} />
+          <span class="gx-truncate">{option.label}</span>
+          <button
+            type="button"
+            class="gx-chip-remove"
+            title={GanttEx.I18n.remove(option.label, @ctx.locale)}
+            aria-label={GanttEx.I18n.remove(option.label, @ctx.locale)}
+            phx-click="filter_remove"
+            phx-value-filter={@definition.id}
+            phx-value-value={option.key}
+            phx-target={@ctx.myself}
+          >
+            <.icon name={:x_mark} />
+          </button>
+        </span>
+      </div>
+      <div :if={@definition.searchable} class="gx-combobox-search">
+        <.icon name={:magnifying_glass} />
+        <input
+          id={"#{@dom_id}-query"}
+          type="search"
+          name={"queries[#{@definition.id}]"}
+          value={@query}
+          class="gx-combobox-input"
+          placeholder={@definition.placeholder || @ctx.labels.search}
+          aria-label={"#{@ctx.labels.search}: #{@definition.label}"}
+          aria-controls={"#{@dom_id}-options"}
+          autocomplete="off"
+          spellcheck="false"
+          phx-debounce="250"
+        />
+      </div>
+      <input type="hidden" name={"filters[#{@definition.id}][]"} value="" />
+      <input :for={key <- @kept} type="hidden" name={"filters[#{@definition.id}][]"} value={key} />
+      <div
+        id={"#{@dom_id}-options"}
+        class="gx-options"
+        role="group"
+        aria-label={@definition.label}
+      >
+        <label
+          :for={option <- @shown}
+          id={"#{@dom_id}-option-#{dom_key(option.key)}"}
+          class={["gx-option", MapSet.member?(@selected_keys, option.key) && "gx-option--checked"]}
+        >
+          <input
+            type={@input_type}
+            name={"filters[#{@definition.id}][]"}
+            value={option.key}
+            checked={MapSet.member?(@selected_keys, option.key)}
+          />
+          <span class={["gx-option-check", "gx-option-check--#{@input_type}"]} aria-hidden="true">
+            <.icon name={:check} />
+          </span>
+          <.option_visual option={option} />
+          <span class="gx-option-text">
+            <span class="gx-truncate">{option.label}</span>
+            <span :if={option.hint} class="gx-option-hint gx-truncate">{option.hint}</span>
+          </span>
+        </label>
+        <p :if={@shown == []} class="gx-options-empty">{@ctx.labels.no_options}</p>
+        <p :if={@more > 0} class="gx-options-more">
+          {GanttEx.I18n.more_options(@more, @ctx.locale)}
+        </p>
+      </div>
+    </fieldset>
+    """
+  end
+
+  attr :ctx, :map, required: true
+  attr :definition, :map, required: true
+
+  defp filter_clear(assigns) do
+    ~H"""
+    <button
+      id={"#{filter_dom_id(@ctx, @definition)}-clear"}
+      type="button"
+      class="gx-text-btn"
+      phx-click="filter_clear"
+      phx-value-filter={@definition.id}
+      phx-target={@ctx.myself}
+    >
+      {@ctx.labels.clear}
+    </button>
+    """
+  end
+
+  attr :option, :map, required: true
+
+  # The avatar, logo, color or icon of an option
+  defp option_visual(assigns) do
+    ~H"""
+    <%= cond do %>
+      <% @option.image -> %>
+        <img class="gx-avatar" src={@option.image} alt="" loading="lazy" />
+      <% @option[:icon] -> %>
+        <span class={["gx-option-icon", "gx-option-icon--#{@option.key}"]}>
+          <.icon name={@option.icon} />
+        </span>
+      <% @option.color -> %>
+        <span class="gx-dot" style={"--gx-dot: #{@option.color}"}></span>
+      <% true -> %>
+    <% end %>
+    """
+  end
+
+  defp filter_dom_id(ctx, definition), do: "#{ctx.id}-filter-#{dom_key(to_string(definition.id))}"
+
+  @doc """
+  Renders the bar shown while filters are active: how many tasks match, the
+  active filters (each one can be removed) and a "Clear filters" action.
+  """
+  attr :ctx, :map, required: true
+  attr :filters, :map, required: true, doc: "`%{definitions, values}`"
+  attr :matched, :integer, required: true
+  attr :total, :integer, required: true
+
+  def filter_status(assigns) do
+    active =
+      for definition <- assigns.filters.definitions,
+          value = Map.get(assigns.filters.values, definition.id),
+          value != nil,
+          do: {definition, filter_summary(definition, value, assigns.ctx)}
+
+    assigns = assign(assigns, active: active)
+
+    ~H"""
+    <div id={"#{@ctx.id}-filter-bar"} class="gx-filter-bar">
+      <span class="gx-filter-count" role="status">
+        <.icon name={:funnel} />
+        {GanttEx.I18n.filtered_tasks(@matched, @total, @ctx.locale)}
+      </span>
+      <span
+        :for={{definition, summary} <- @active}
+        id={"#{filter_dom_id(@ctx, definition)}-active"}
+        class="gx-chip gx-chip--summary"
+      >
+        <span class="gx-truncate">
+          <span :if={definition.kind != :search} class="gx-chip-label">{definition.label}:</span>
+          {summary}
+        </span>
+        <button
+          type="button"
+          class="gx-chip-remove"
+          title={GanttEx.I18n.remove(definition.label, @ctx.locale)}
+          aria-label={GanttEx.I18n.remove(definition.label, @ctx.locale)}
+          phx-click="filter_clear"
+          phx-value-filter={definition.id}
+          phx-target={@ctx.myself}
+        >
+          <.icon name={:x_mark} />
+        </button>
+      </span>
+      <button
+        id={"#{@ctx.id}-clear-filters"}
+        type="button"
+        class="gx-text-btn"
+        phx-click="filters_clear"
+        phx-target={@ctx.myself}
+      >
+        {@ctx.labels.clear_filters}
+      </button>
+    </div>
+    """
+  end
+
+  defp filter_summary(%{kind: :search}, value, _ctx), do: "“#{value}”"
+
+  defp filter_summary(%{kind: :dates}, %{from: from, to: to}, ctx) do
+    format = &(&1 && ctx.format.(NaiveDateTime.new!(&1, ~T[00:00:00]), :date))
+
+    case {format.(from), format.(to)} do
+      {from, nil} -> "≥ #{from}"
+      {nil, to} -> "≤ #{to}"
+      {from, to} -> "#{from} – #{to}"
+    end
+  end
+
+  defp filter_summary(definition, values, _ctx) do
+    keys = MapSet.new(values, &GanttEx.Filter.option_key/1)
+
+    definition.options
+    |> Enum.filter(&MapSet.member?(keys, &1.key))
+    |> Enum.map_join(", ", & &1.label)
   end
 
   defp export_label(:json), do: "JSON"

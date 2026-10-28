@@ -175,6 +175,25 @@ defmodule GanttEx.I18n do
         mfo: gettext("Must finish on"),
         # status
         blocked: gettext("Blocked"),
+        status: gettext("Status"),
+        not_started: gettext("Not started"),
+        in_progress: gettext("In progress"),
+        completed: gettext("Completed"),
+        overdue: gettext("Overdue"),
+        critical: gettext("Critical"),
+        restricted: gettext("With restrictions"),
+        # filters
+        filters: gettext("Filters"),
+        search: gettext("Search"),
+        search_tasks: gettext("Search tasks"),
+        clear_search: gettext("Clear search"),
+        clear: gettext("Clear"),
+        clear_filters: gettext("Clear filters"),
+        dates: gettext("Dates"),
+        from: gettext("From"),
+        to: gettext("To"),
+        no_matches: gettext("No matching tasks"),
+        no_options: gettext("No options found"),
         # confirmation
         confirm_delete_task: gettext("Are you sure you want to delete this task?"),
         confirm_delete_subtasks: gettext("Its subtasks will be deleted too."),
@@ -260,6 +279,59 @@ defmodule GanttEx.I18n do
     with_locale(locale, fn ->
       ngettext("%{count} open restriction", "%{count} open restrictions", count)
     end)
+  end
+
+  @doc """
+  Returns how many tasks match the filters, out of the total.
+
+      iex> GanttEx.I18n.filtered_tasks(12, 340, "en")
+      "12 of 340 tasks"
+  """
+  @spec filtered_tasks(non_neg_integer(), non_neg_integer(), locale()) :: String.t()
+  def filtered_tasks(matched, total, locale) do
+    with_locale(locale, fn ->
+      ngettext("%{matched} of %{count} task", "%{matched} of %{count} tasks", total,
+        matched: matched
+      )
+    end)
+  end
+
+  @doc """
+  Returns the accessible label of the active filters badge.
+
+      iex> GanttEx.I18n.active_filters(2, "en")
+      "2 active filters"
+  """
+  @spec active_filters(non_neg_integer(), locale()) :: String.t()
+  def active_filters(count, locale) do
+    with_locale(locale, fn ->
+      ngettext("%{count} active filter", "%{count} active filters", count)
+    end)
+  end
+
+  @doc """
+  Returns the hint shown when a filter has more options than listed.
+
+      iex> GanttEx.I18n.more_options(5, "en")
+      "5 more, refine the search"
+  """
+  @spec more_options(pos_integer(), locale()) :: String.t()
+  def more_options(count, locale) do
+    with_locale(locale, fn ->
+      ngettext("%{count} more, refine the search", "%{count} more, refine the search", count)
+    end)
+  end
+
+  @doc """
+  Returns the label of the button that removes a value, such as a selected
+  filter option.
+
+      iex> GanttEx.I18n.remove("Ana", "en")
+      "Remove Ana"
+  """
+  @spec remove(String.t(), locale()) :: String.t()
+  def remove(name, locale) do
+    with_locale(locale, fn -> gettext("Remove %{name}", name: name) end)
   end
 
   defp unit_text(:minute, n), do: ngettext("%{count} minute", "%{count} minutes", n)

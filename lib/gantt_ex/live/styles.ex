@@ -56,6 +56,7 @@ defmodule GanttEx.Live.Styles do
         --gx-warning: #f59e0b;
         --gx-warning-strong: #b45309;
         --gx-warning-soft: rgba(245, 158, 11, 0.14);
+        --gx-success: #10b981;
         --gx-backdrop: rgba(15, 23, 42, 0.45);
         --gx-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
         --gx-shadow-lg: 0 24px 48px -16px rgba(15, 23, 42, 0.35), 0 2px 8px rgba(15, 23, 42, 0.06);
@@ -92,6 +93,7 @@ defmodule GanttEx.Live.Styles do
         --gx-danger-soft: rgba(244, 63, 94, 0.16);
         --gx-warning-strong: #fbbf24;
         --gx-warning-soft: rgba(251, 191, 36, 0.14);
+        --gx-success: #34d399;
         --gx-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
         --gx-shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.08);
       }
@@ -122,6 +124,7 @@ defmodule GanttEx.Live.Styles do
           --gx-danger-soft: rgba(244, 63, 94, 0.16);
           --gx-warning-strong: #fbbf24;
           --gx-warning-soft: rgba(251, 191, 36, 0.14);
+          --gx-success: #34d399;
           --gx-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
           --gx-shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.08);
         }
@@ -226,6 +229,7 @@ defmodule GanttEx.Live.Styles do
 
       /* -------------------------------------------------------------- toolbar */
       .gx-toolbar {
+        position: relative;
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -402,6 +406,570 @@ defmodule GanttEx.Live.Styles do
 
       .gx-menu-item:hover {
         background: var(--gx-surface-2);
+      }
+
+      .gx-btn--small {
+        width: 26px;
+        height: 26px;
+      }
+
+      .gx-text-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px 7px;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--gx-accent-strong);
+        white-space: nowrap;
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.15s, color 0.15s;
+      }
+
+      .gx-text-btn:hover {
+        background: var(--gx-accent-soft);
+      }
+
+      .gx-text-btn:focus-visible {
+        outline: 2px solid var(--gx-accent);
+        outline-offset: 1px;
+      }
+
+      .gx-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        margin-right: -2px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+        color: var(--gx-on-accent);
+        background: var(--gx-accent);
+        border-radius: 999px;
+        font-variant-numeric: tabular-nums;
+        animation: gx-pop 0.18s var(--gx-ease);
+      }
+
+      /* ---------------------------------------------------------------- search */
+      .gx-search {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 200px;
+        height: 30px;
+        margin: 0;
+        color: var(--gx-muted);
+        background: var(--gx-bg);
+        border: 1px solid var(--gx-border);
+        border-radius: 8px;
+        transition: width 0.2s var(--gx-ease), border-color 0.15s, box-shadow 0.15s;
+      }
+
+      .gx-search:hover {
+        border-color: color-mix(in srgb, var(--gx-border) 50%, var(--gx-muted));
+      }
+
+      .gx-search:focus-within,
+      .gx-search--active {
+        width: 240px;
+      }
+
+      .gx-search:focus-within {
+        border-color: var(--gx-accent);
+        box-shadow: 0 0 0 3px var(--gx-accent-soft);
+      }
+
+      .gx-search-icon {
+        position: absolute;
+        left: 9px;
+        width: 14px;
+        height: 14px;
+        pointer-events: none;
+      }
+
+      .gx-search-input {
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        padding: 0 28px 0 30px;
+        font: inherit;
+        color: var(--gx-text);
+        background: transparent;
+        border: 0;
+        border-radius: inherit;
+        outline: none;
+        appearance: none;
+        -webkit-appearance: none;
+      }
+
+      .gx-search-input::placeholder,
+      .gx-combobox-input::placeholder {
+        color: var(--gx-muted);
+        opacity: 0.8;
+      }
+
+      .gx-search-input::-webkit-search-cancel-button,
+      .gx-combobox-input::-webkit-search-cancel-button {
+        display: none;
+      }
+
+      .gx-search-clear {
+        position: absolute;
+        right: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        color: var(--gx-muted);
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      .gx-search-clear:hover {
+        color: var(--gx-text);
+        background: var(--gx-surface-2);
+      }
+
+      .gx-search-clear .gx-icon {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* -------------------------------------------------------------- popovers */
+      /* Positioned against the toolbar, so they stay inside the chart */
+      .gx-popover {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 10px;
+        z-index: 60;
+        display: flex;
+        flex-direction: column;
+        max-height: min(560px, calc(var(--gx-height, 640px) - 16px));
+        color: var(--gx-text);
+        background: var(--gx-bg);
+        border: 1px solid var(--gx-border);
+        border-radius: var(--gx-radius-lg);
+        box-shadow: var(--gx-shadow-lg);
+        animation: gx-pop 0.16s var(--gx-ease);
+      }
+
+      .gx-popover-header {
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 10px 10px 16px;
+        border-bottom: 1px solid var(--gx-line);
+      }
+
+      .gx-popover-title {
+        flex: 1;
+        margin: 0;
+        font-size: 13px;
+        font-weight: 650;
+        letter-spacing: -0.005em;
+      }
+
+      .gx-filters {
+        width: min(640px, calc(100% - 20px));
+      }
+
+      .gx-filters-form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        align-items: start;
+        gap: 18px 22px;
+        min-height: 0;
+        padding: 14px 16px 18px;
+        overflow: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+      }
+
+      .gx-filter {
+        min-width: 0;
+        padding: 0;
+        margin: 0;
+        border: 0;
+      }
+
+      .gx-filter-legend {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        min-height: 22px;
+        padding: 0;
+        margin-bottom: 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--gx-muted);
+      }
+
+      .gx-filter-legend .gx-text-btn {
+        text-transform: none;
+        letter-spacing: normal;
+      }
+
+      .gx-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .gx-chip-check {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 11px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--gx-text);
+        white-space: nowrap;
+        background: var(--gx-bg);
+        border: 1px solid var(--gx-border);
+        border-radius: 999px;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+      }
+
+      .gx-chip-check:hover {
+        border-color: color-mix(in srgb, var(--gx-border) 40%, var(--gx-muted));
+      }
+
+      .gx-chip-check:active {
+        transform: scale(0.97);
+      }
+
+      .gx-chip-check input,
+      .gx-option input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .gx-chip-check:has(input:checked),
+      .gx-chip-check--on {
+        color: var(--gx-accent-strong);
+        background: var(--gx-accent-soft);
+        border-color: color-mix(in srgb, var(--gx-accent) 55%, transparent);
+      }
+
+      .gx-chip-check:has(input:focus-visible),
+      .gx-option:has(input:focus-visible) {
+        outline: 2px solid var(--gx-accent);
+        outline-offset: 1px;
+      }
+
+      .gx-chip-check .gx-type-dot {
+        margin: 0;
+      }
+
+      .gx-dot {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        background: var(--gx-dot, var(--gx-muted));
+        border-radius: 50%;
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--gx-dot, var(--gx-muted)) 18%, transparent);
+      }
+
+      .gx-option-icon {
+        display: inline-flex;
+        flex: none;
+      }
+
+      .gx-option-icon .gx-icon {
+        width: 14px;
+        height: 14px;
+      }
+
+      .gx-option-icon--blocked {
+        color: var(--gx-danger);
+      }
+
+      .gx-option-icon--restricted {
+        color: var(--gx-warning);
+      }
+
+      .gx-avatar {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        object-fit: cover;
+        background: var(--gx-surface-2);
+        border-radius: 50%;
+        box-shadow: 0 0 0 1px var(--gx-line);
+      }
+
+      .gx-filter-dates {
+        display: flex;
+        gap: 10px;
+      }
+
+      .gx-filter-dates .gx-field {
+        gap: 4px;
+      }
+
+      .gx-filter-dates .gx-field > span {
+        font-size: 12px;
+        color: var(--gx-muted);
+      }
+
+      .gx-input--small {
+        height: 32px;
+        padding: 0 8px;
+      }
+
+      .gx-filter .gx-error {
+        margin-top: 6px;
+      }
+
+      /* custom filters: chips, search and options */
+      .gx-combobox-chips {
+        margin-bottom: 8px;
+      }
+
+      .gx-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        max-width: 100%;
+        height: 26px;
+        padding: 0 3px 0 9px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--gx-text);
+        background: var(--gx-surface-2);
+        border: 1px solid transparent;
+        border-radius: 999px;
+        animation: gx-pop 0.14s var(--gx-ease);
+      }
+
+      .gx-chip:has(> .gx-avatar) {
+        padding-left: 3px;
+      }
+
+      .gx-chip .gx-avatar {
+        width: 18px;
+        height: 18px;
+      }
+
+      .gx-chip-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        color: var(--gx-muted);
+        background: transparent;
+        border: 0;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: background-color 0.15s, color 0.15s;
+      }
+
+      .gx-chip-remove:hover {
+        color: var(--gx-text);
+        background: color-mix(in srgb, var(--gx-muted) 20%, transparent);
+      }
+
+      .gx-chip-remove:focus-visible {
+        outline: 2px solid var(--gx-accent);
+      }
+
+      .gx-chip-remove .gx-icon {
+        width: 12px;
+        height: 12px;
+      }
+
+      .gx-combobox-search {
+        position: relative;
+        display: flex;
+        align-items: center;
+        margin-bottom: 6px;
+        color: var(--gx-muted);
+      }
+
+      .gx-combobox-search > .gx-icon {
+        position: absolute;
+        left: 9px;
+        width: 14px;
+        height: 14px;
+        pointer-events: none;
+      }
+
+      .gx-combobox-input {
+        width: 100%;
+        height: 32px;
+        padding: 0 10px 0 30px;
+        font: inherit;
+        color: var(--gx-text);
+        background: var(--gx-bg);
+        border: 1px solid var(--gx-border);
+        border-radius: 8px;
+        outline: none;
+        appearance: none;
+        -webkit-appearance: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+      }
+
+      .gx-combobox-input:focus {
+        border-color: var(--gx-accent);
+        box-shadow: 0 0 0 3px var(--gx-accent-soft);
+      }
+
+      .gx-options {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        max-height: 196px;
+        padding: 4px;
+        overflow: auto;
+        overscroll-behavior: contain;
+        background: var(--gx-surface);
+        border: 1px solid var(--gx-line);
+        border-radius: 10px;
+        scrollbar-width: thin;
+      }
+
+      .gx-option {
+        position: relative;
+        display: flex;
+        flex: none;
+        align-items: center;
+        gap: 8px;
+        min-height: 32px;
+        padding: 4px 8px;
+        border-radius: 7px;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 0.12s;
+      }
+
+      .gx-option:hover {
+        background: var(--gx-row-hover);
+        background: color-mix(in srgb, var(--gx-text) 5%, transparent);
+      }
+
+      .gx-option-check {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        width: 16px;
+        height: 16px;
+        color: transparent;
+        background: var(--gx-bg);
+        border: 1.5px solid color-mix(in srgb, var(--gx-border) 30%, var(--gx-muted));
+        border-radius: 4px;
+        transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+      }
+
+      .gx-option-check--radio {
+        border-radius: 50%;
+      }
+
+      .gx-option-check .gx-icon {
+        width: 11px;
+        height: 11px;
+        stroke-width: 3;
+      }
+
+      .gx-option:has(input:checked) .gx-option-check,
+      .gx-option--checked .gx-option-check {
+        color: var(--gx-on-accent);
+        background: var(--gx-accent);
+        border-color: var(--gx-accent);
+      }
+
+      .gx-option-text {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        line-height: 1.25;
+      }
+
+      .gx-option-hint {
+        font-size: 11px;
+        color: var(--gx-muted);
+      }
+
+      .gx-options-empty,
+      .gx-options-more {
+        margin: 0;
+        padding: 6px 8px;
+        font-size: 12px;
+        color: var(--gx-muted);
+      }
+
+      .gx-options-more {
+        font-style: italic;
+      }
+
+      /* -------------------------------------------------------- filter status */
+      .gx-filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 10px;
+        font-size: 12px;
+        background: color-mix(in srgb, var(--gx-accent) 5%, var(--gx-surface));
+        border-bottom: 1px solid var(--gx-border);
+        animation: gx-fade 0.16s ease-out;
+      }
+
+      .gx-filter-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-right: 4px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .gx-filter-count .gx-icon {
+        width: 14px;
+        height: 14px;
+        color: var(--gx-accent);
+      }
+
+      .gx-chip--summary {
+        max-width: 320px;
+        height: 24px;
+        background: var(--gx-bg);
+        border-color: var(--gx-border);
+      }
+
+      .gx-chip-label {
+        color: var(--gx-muted);
+      }
+
+      .gx-empty p {
+        margin: 0 0 12px;
       }
 
       /* ----------------------------------------------------------------- grid */
@@ -1898,6 +2466,9 @@ defmodule GanttEx.Live.Styles do
         .gx-notice,
         .gx-backdrop,
         .gx-popup,
+        .gx-popover,
+        .gx-chip-remove,
+        .gx-filter-bar .gx-text-btn,
         .gx-tooltip,
         .gx-link-point,
         .gx-handle,

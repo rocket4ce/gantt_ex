@@ -29,4 +29,5 @@ defmodule GanttEx.DoctestTest do
   doctest GanttEx.Live.Columns
   doctest GanttEx.Live.Interaction
   doctest GanttEx.Live.Icons
+  doctest GanttEx.Filter
 end
