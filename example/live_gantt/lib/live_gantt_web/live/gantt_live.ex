@@ -46,11 +46,13 @@ defmodule LiveGanttWeb.GanttLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    params = %{"locale" => "en", "query" => "", "baselines" => "true"}
+    params = %{"locale" => "en", "baselines" => "true"}
 
     {:ok,
      socket
      |> assign(page_title: "Gantt", locales: @locales, toggles: @toggles, activity_count: 0)
+     # What the user chose in the chart; a real app would store them as preferences.
+     |> assign(filter_values: nil, column_layout: nil)
      |> assign(calendar_dates())
      |> apply_settings(params)
      |> stream(:activity, [])
@@ -74,8 +76,6 @@ defmodule LiveGanttWeb.GanttLive do
     locale =
       if params["locale"] in Enum.map(@locales, &elem(&1, 1)), do: params["locale"], else: "en"
 
-    query = params |> Map.get("query", "") |> String.trim()
-
     enabled =
       Map.new(@toggles, fn {key, _label} ->
         {String.to_existing_atom(key), params[key] == "true"}
@@ -83,8 +83,6 @@ defmodule LiveGanttWeb.GanttLive do
 
     assign(socket,
       locale: locale,
-      query: query,
-      filter: text_filter(query),
       options: enabled,
       settings: to_form(params, as: :settings)
     )
@@ -97,6 +95,16 @@ defmodule LiveGanttWeb.GanttLive do
 
   @impl true
   def handle_info({GanttEx, %Event{type: :task_selected}}, socket), do: {:noreply, socket}
+
+  def handle_info({GanttEx, %Event{type: :filters_changed, filters: filters}}, socket),
+    do: {:noreply, assign(socket, filter_values: filters)}
+
+  def handle_info({GanttEx, %Event{type: :columns_changed, columns: layout}}, socket),
+    do: {:noreply, assign(socket, column_layout: layout)}
+
+  def handle_info({GanttEx, %Event{type: :task_action, action: :detail, task: task}}, socket) do
+    {:noreply, socket |> log_activity(%Event{type: :task_action, task: task})}
+  end
 
   def handle_info({GanttEx, %Event{} = event}, socket) do
     case Planning.apply_event(event) do
@@ -131,15 +139,13 @@ defmodule LiveGanttWeb.GanttLive do
     )
   end
 
-  defp text_filter(""), do: nil
-
-  defp text_filter(query) do
-    query = String.downcase(query)
-
-    fn task ->
-      String.contains?(String.downcase(task.text), query) or
-        String.contains?(String.downcase(task.meta[:owner] || ""), query)
-    end
+  # The owners as a filter of the chart, with an option for unassigned tasks.
+  defp owner_filter(resources, label) do
+    %{
+      id: :owner,
+      label: label,
+      options: [{"—", nil} | Enum.map(resources, &{&1.text, &1.id})]
+    }
   end
 
   defp stats(tasks) do
@@ -177,6 +183,7 @@ defmodule LiveGanttWeb.GanttLive do
     "#{link.type |> to_string() |> String.replace("_", " ")} · lag #{link.lag}"
   end
 
+  defp activity_icon(:task_action), do: "hero-arrow-top-right-on-square-micro"
   defp activity_icon(type) when type in [:task_created, :link_created], do: "hero-plus-micro"
   defp activity_icon(type) when type in [:task_deleted, :link_deleted], do: "hero-trash-micro"
   defp activity_icon(:task_moved), do: "hero-arrows-up-down-micro"
@@ -224,16 +231,6 @@ defmodule LiveGanttWeb.GanttLive do
           phx-change="settings"
           class="flex max-w-3xl flex-wrap items-end justify-end gap-3 [&_.fieldset]:mb-0"
         >
-          <div class="w-56">
-            <.input
-              field={@settings[:query]}
-              type="search"
-              label="Search"
-              placeholder="Task or owner…"
-              phx-debounce="200"
-              autocomplete="off"
-            />
-          </div>
           <div class="w-48">
             <.input field={@settings[:locale]} type="select" label="Language" options={@locales} />
           </div>
@@ -271,7 +268,9 @@ defmodule LiveGanttWeb.GanttLive do
         links={@links}
         locale={@locale}
         readonly={@options.readonly}
-        filter={@filter}
+        filters={[:search, :status, owner_filter(@resources, @owner_label), :type, :dates]}
+        filter_values={@filter_values}
+        column_layout={@column_layout}
         work_time={@options.work_time}
         calendar={[holidays: [@holiday]]}
         auto_scheduling={@options.auto_scheduling}
@@ -287,7 +286,8 @@ defmodule LiveGanttWeb.GanttLive do
         export_filename="website-relaunch"
         class="shadow-sm"
       >
-        <:column field={:wbs} width={56} />
+        <:column field={:actions} actions={[:drag, :rename, :block, :detail, :delete]} />
+        <:column field={:wbs} width={56} hidden />
         <:column field={:text} tree width={240} />
         <:column :let={task} field={:owner} label={@owner_label} width={132} editor={:text}>
           <span :if={task.meta[:owner]} class="flex min-w-0 items-center gap-2">
@@ -298,7 +298,9 @@ defmodule LiveGanttWeb.GanttLive do
           </span>
         </:column>
         <:column field={:start_date} width={100} />
+        <:column field={:end_date} width={100} hidden />
         <:column field={:duration} width={74} />
+        <:column field={:progress} width={80} hidden />
         <:column field={:add} width={44} />
         <:lightbox_fields :let={form}>
           <div class="gx-field">

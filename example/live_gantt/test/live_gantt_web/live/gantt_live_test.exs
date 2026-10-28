@@ -79,6 +79,28 @@ defmodule LiveGanttWeb.GanttLiveTest do
     assert has_element?(view, "[data-gx-row='#{design.id}']")
   end
 
+  test "row actions and filters", %{conn: conn, design: design, build: build} do
+    {:ok, view, _html} = live(conn, ~p"/")
+
+    view |> element("#{dom_id(design)}-detail") |> render_click()
+    sync(view)
+    assert has_element?(view, "#activity li", "task_action")
+
+    view |> element("#{dom_id(build)}-block") |> render_click()
+    sync(view)
+    assert %Task{blocked: true} = Repo.reload!(build)
+
+    view |> element("#project-gantt-filters-toggle") |> render_click()
+
+    view
+    |> element("#project-gantt-filters-form")
+    |> render_change(%{"filters" => %{"owner" => ["Ana"]}})
+
+    sync(view)
+    assert has_element?(view, dom_id(design))
+    refute has_element?(view, dom_id(build))
+  end
+
   test "baselines and deadlines are persisted", %{conn: conn, build: build} do
     {:ok, view, _html} = live(conn, ~p"/")
 
@@ -100,9 +122,8 @@ defmodule LiveGanttWeb.GanttLiveTest do
     assert has_element?(view, "#project-gantt-add-task", "Aufgabe hinzufügen")
     assert has_element?(view, "[role=columnheader]", "Verantwortlich")
 
-    view
-    |> element("#settings-form")
-    |> render_change(%{"settings" => %{"locale" => "en", "query" => "build"}})
+    view |> element("#settings-form") |> render_change(%{"settings" => %{"locale" => "en"}})
+    view |> element("#project-gantt-search") |> render_change(%{"search" => "build"})
 
     refute has_element?(view, dom_id(design))
 

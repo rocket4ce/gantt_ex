@@ -17,6 +17,7 @@ defmodule LiveGantt.Planning.Task do
     field :duration, :integer, default: 1
     field :progress, :float, default: 0.0
     field :open, :boolean, default: true
+    field :blocked, :boolean, default: false
     field :position, :integer, default: 0
     field :owner, :string
     field :planned_start, :naive_datetime
@@ -43,6 +44,7 @@ defmodule LiveGantt.Planning.Task do
       :duration,
       :progress,
       :open,
+      :blocked,
       :position,
       :owner,
       :parent_id,

@@ -110,7 +110,7 @@ defmodule LiveGantt.Planning do
 
     fields
     |> Map.take(
-      ~w(text type start_date duration progress open owner planned_start planned_end deadline constraint_type constraint_date)a
+      ~w(text type start_date duration progress open blocked owner planned_start planned_end deadline constraint_type constraint_date)a
     )
     |> then(fn attrs ->
       if parent == :unchanged, do: attrs, else: Map.put(attrs, :parent_id, parent)
