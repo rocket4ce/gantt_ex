@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2 (2026-10-28)
+
+Fixes:
+
+- Narrowing the grid (with its splitter or the `:grid_width` attribute)
+  below the width of its columns no longer lets them overflow onto the
+  timeline: they are clipped from the right, and the tree column keeps at
+  least 120px
+
 ## 0.1.1 (2026-10-26)
 
 Performance with large plans. Measured on a real plan of 7,000 tasks and
