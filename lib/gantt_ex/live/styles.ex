@@ -400,6 +400,9 @@ defmodule GanttEx.Live.Styles do
         display: flex;
         flex: none;
         width: var(--gx-grid-width);
+        /* A grid narrower than its columns clips them instead of covering the
+           timeline ("clip" keeps sticky positioning working) */
+        overflow: clip;
         background: var(--gx-surface);
         border-right: 1px solid var(--gx-border);
       }
@@ -464,8 +467,9 @@ defmodule GanttEx.Live.Styles do
         right: -4px;
       }
 
+      /* Inside the clipped header, its line on the border of the grid */
       .gx-splitter {
-        right: -4px;
+        right: 0;
         z-index: 5;
       }
 
@@ -487,12 +491,18 @@ defmodule GanttEx.Live.Styles do
         opacity: 1;
       }
 
+      .gx-splitter::after {
+        left: auto;
+        right: 0;
+      }
+
       .gx-grid {
         position: sticky;
         left: 0;
         z-index: 20;
         flex: none;
         width: var(--gx-grid-width);
+        overflow: clip;
         background: var(--gx-bg);
         border-right: 1px solid var(--gx-border);
         box-shadow: 4px 0 12px -10px rgba(15, 23, 42, 0.25);

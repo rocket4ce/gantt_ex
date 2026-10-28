@@ -304,7 +304,9 @@ defmodule GanttEx.Live.Components do
     """
   end
 
-  defp column_style(%{tree: true}, _index), do: "flex: 1 1 0; min-width: 0"
+  # The tree column takes the free width but keeps a minimum: when the grid is
+  # narrowed, the columns on its right are clipped before the task names
+  defp column_style(%{tree: true}, _index), do: "flex: 1 1 0; min-width: 120px"
   defp column_style(_col, index), do: "width: var(--gx-col-#{index}); flex: none"
 
   defp aria_sort({field, :asc}, %{field: field}), do: "ascending"

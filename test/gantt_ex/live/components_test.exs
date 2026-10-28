@@ -45,4 +45,21 @@ defmodule GanttEx.Live.ComponentsTest do
     assert html =~ ~s(<span class="gx-truncate gx-wbs">1.1</span>)
     assert hd(columns).label == "EDT"
   end
+
+  test "the tree column keeps a minimum width when the grid is narrowed" do
+    store = Store.new!([%{id: 1, text: "A", start_date: ~D[2025-01-01]}])
+    [row] = Store.rows(store)
+    columns = Columns.build([%{field: :text}, %{field: :start_date}], I18n.labels("en"))
+
+    html =
+      render_component(&Components.grid_row/1,
+        ctx: ctx(),
+        row: Map.put(row, :selected, false),
+        columns: columns
+      )
+
+    # The other columns keep their width and are clipped by the grid first
+    assert html =~ "flex: 1 1 0; min-width: 120px"
+    assert html =~ "width: var(--gx-col-1); flex: none"
+  end
 end
