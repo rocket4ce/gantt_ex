@@ -115,8 +115,9 @@ defmodule GanttEx.Live.Hook do
           this.handleEvent("gantt_ex:focus", (payload) => {
             if (payload.id !== this.el.id) return
             requestAnimationFrame(() => {
-              const el = this.el.querySelector(payload.selector)
-              if (el && document.activeElement !== el) el.focus({preventScroll: false})
+              let el = null
+              try { el = this.el.querySelector(payload.selector) } catch (_error) { return }
+              if (el && document.activeElement !== el) el.focus()
             })
           })
 
