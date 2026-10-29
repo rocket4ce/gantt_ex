@@ -43,6 +43,22 @@ defmodule GanttEx.Live.SelectionTest do
     refute has_element?(view, "#gantt-row-3.gx-row--selected")
   end
 
+  test "the host's selection replaces the whole selection, or clears it", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn)
+
+    view |> element("#gantt-row-2") |> render_click()
+    hook(view, "gx:select", %{"key" => "3", "mode" => "toggle"})
+
+    run_in_parent(view, fn -> GanttEx.Live.Gantt.select("gantt", 4) end)
+    refute has_element?(view, "#gantt-row-2.gx-row--selected")
+    refute has_element?(view, "#gantt-row-3.gx-row--selected")
+    assert has_element?(view, "#gantt-row-4.gx-row--selected")
+
+    hook(view, "gx:select", %{"key" => "2", "mode" => "toggle"})
+    run_in_parent(view, fn -> GanttEx.Live.Gantt.select("gantt", nil) end)
+    refute has_element?(view, ".gx-row--selected")
+  end
+
   test "deletes the selected tasks at once", %{conn: conn} do
     {:ok, view, _html} = mount_gantt(conn)
 

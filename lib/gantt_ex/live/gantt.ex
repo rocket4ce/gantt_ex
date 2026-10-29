@@ -626,13 +626,17 @@ defmodule GanttEx.Live.Gantt do
   defp handle_action(socket, :expand_all), do: assign(socket, :collapsed, MapSet.new())
   defp handle_action(socket, :collapse_all), do: assign(socket, :collapsed, all_parents(socket))
 
+  # The selection of the host replaces the whole selection
   defp handle_action(socket, {:select, nil}),
-    do: assign(socket, selected: nil, quick_info_key: nil)
+    do: assign(socket, selected: nil, selection: MapSet.new(), quick_info_key: nil)
 
   defp handle_action(socket, {:select, id}) do
     case Store.get_task(socket.assigns.store, id) do
-      nil -> socket
-      task -> assign(socket, selected: Store.key(task.id))
+      nil ->
+        socket
+
+      task ->
+        assign(socket, selected: Store.key(task.id), selection: MapSet.new([Store.key(task.id)]))
     end
   end
 

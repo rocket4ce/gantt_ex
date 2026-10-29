@@ -35,6 +35,9 @@ Changes:
 - The menus of the toolbar (lookahead, export) close with Escape (back to
   their button), with a click or tap outside them, and when another one
   opens
+- `GanttEx.Live.Gantt.select/2` replaces the whole selection: a task
+  selected by the host is the only one selected, and `nil` clears a
+  selection of several tasks too
 
 - An end edited onto a non-working day (resized or typed) no longer
   leaves the bar covering days nobody works, and resizing the start onto
