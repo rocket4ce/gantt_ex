@@ -103,6 +103,34 @@ defmodule GanttEx.Live.PlansTest do
     end
   end
 
+  describe "progress column" do
+    test "colors the progress by the status of the task", %{conn: conn} do
+      # today is Jan 8
+      tasks = [
+        %{id: 1, text: "Done", start_date: ~D[2025-01-02], duration: 2, progress: 1.0},
+        %{id: 2, text: "Late", start_date: ~D[2025-01-02], duration: 2, progress: 0.4},
+        %{id: 3, text: "Going", start_date: ~D[2025-01-07], duration: 3, progress: 0.5},
+        %{id: 4, text: "Next", start_date: ~D[2025-01-13], duration: 2}
+      ]
+
+      {:ok, view, _html} =
+        mount_gantt(conn, tasks: tasks, links: [], progress_column: true, legend: true)
+
+      for {id, status, percent} <- [
+            {1, "completed", "100%"},
+            {2, "overdue", "40%"},
+            {3, "in-progress", "50%"},
+            {4, "not-started", "0%"}
+          ] do
+        assert has_element?(view, "#gantt-row-#{id} .gx-progress--#{status}", percent)
+      end
+
+      assert has_element?(view, "#gantt-legend-group-progress", "Progress")
+      assert has_element?(view, "#gantt-legend-status-overdue", "Overdue")
+      assert has_element?(view, "#gantt-legend-status-overdue .gx-swatch.gx-progress--overdue")
+    end
+  end
+
   describe "summary bars" do
     test "can be drawn as brackets", %{conn: conn} do
       {:ok, view, _html} = mount_gantt(conn, summary_bars: :bracket)

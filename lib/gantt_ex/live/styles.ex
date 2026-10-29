@@ -2893,6 +2893,69 @@ defmodule GanttEx.Live.Styles do
         box-shadow: var(--gx-shadow);
       }
 
+      /* --------------------------------------------------- progress column */
+      .gx-progress {
+        --gx-status: var(--gx-accent);
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .gx-progress--completed {
+        --gx-status: var(--gx-success);
+      }
+
+      .gx-progress--not-started {
+        --gx-status: var(--gx-muted);
+      }
+
+      .gx-progress--overdue {
+        --gx-status: var(--gx-danger);
+      }
+
+      .gx-progress-value {
+        font-size: 12px;
+        font-weight: 600;
+        line-height: 1;
+        color: var(--gx-status);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .gx-progress--not-started .gx-progress-value {
+        font-weight: 500;
+      }
+
+      .gx-progress-track {
+        display: block;
+        height: 4px;
+        overflow: hidden;
+        background: var(--gx-surface-2);
+        border-radius: 999px;
+      }
+
+      .gx-progress-fill {
+        display: block;
+        height: 100%;
+        background: var(--gx-status);
+        border-radius: inherit;
+        transition: width 0.2s var(--gx-ease);
+      }
+
+      .gx-align-center .gx-progress,
+      .gx-align-right .gx-progress {
+        align-items: stretch;
+      }
+
+      .gx-align-center .gx-progress-value {
+        text-align: center;
+      }
+
+      .gx-align-right .gx-progress-value {
+        text-align: right;
+      }
+
       /* -------------------------------------------------------------- legend */
       .gx-legend {
         display: flex;
@@ -3052,6 +3115,10 @@ defmodule GanttEx.Live.Styles do
         background: var(--gx-plan-soft);
         border-inline: 1.5px solid var(--gx-plan);
         border-radius: 0;
+      }
+
+      .gx-swatch--status {
+        background: var(--gx-status, var(--gx-accent));
       }
 
       .gx-swatch--dot {

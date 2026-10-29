@@ -13,6 +13,7 @@ defmodule GanttEx.Test.GanttLive do
        row_actions: Map.get(session, "row_actions"),
        actions_reveal: Map.get(session, "actions_reveal", :hover),
        extra_columns: Map.get(session, "extra_columns", false),
+       progress_column: Map.get(session, "progress_column", false),
        test_pid: Map.fetch!(session, "test_pid")
      )}
   end
@@ -32,6 +33,7 @@ defmodule GanttEx.Test.GanttLive do
       <:column field={:text} tree />
       <:column field={:start_date} />
       <:column field={:end_date} />
+      <:column :if={@progress_column} field={:progress} />
       <:column :let={task} field={:owner} label="Owner" editor={:text}>
         <span class="owner">{task.meta[:owner]}</span>
       </:column>

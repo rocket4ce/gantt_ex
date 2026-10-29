@@ -53,6 +53,7 @@ defmodule GanttEx.LiveCase do
     {row_actions, opts} = Keyword.pop(opts, :row_actions)
     {actions_reveal, opts} = Keyword.pop(opts, :actions_reveal, :hover)
     {extra_columns, opts} = Keyword.pop(opts, :extra_columns, false)
+    {progress_column, opts} = Keyword.pop(opts, :progress_column, false)
 
     live_isolated(conn, GanttEx.Test.GanttLive,
       session: %{
@@ -62,6 +63,7 @@ defmodule GanttEx.LiveCase do
         "row_actions" => row_actions,
         "actions_reveal" => actions_reveal,
         "extra_columns" => extra_columns,
+        "progress_column" => progress_column,
         "test_pid" => self()
       }
     )

@@ -1175,6 +1175,31 @@ defmodule GanttEx.Live.Components do
     """
   end
 
+  # The progress, as a bar of the color of the status of the task
+  defp cell_content(%{column: %{field: :progress, inner_block: nil}, row: row} = assigns)
+       when not is_map_key(row, :group) or row.group in [nil, false] do
+    task = assigns.row.task
+    today = Map.get_lazy(assigns.ctx, :today, &NaiveDateTime.local_now/0)
+    status = GanttEx.Filter.task_status(task, today, Map.get(assigns.ctx, :unit, :day))
+
+    assigns =
+      assign(assigns,
+        percent: round(task.progress * 100),
+        status: status,
+        status_class: String.replace(to_string(status), "_", "-"),
+        title: Map.fetch!(assigns.ctx.labels, status)
+      )
+
+    ~H"""
+    <span class={["gx-progress", "gx-progress--#{@status_class}"]} title={@title}>
+      <span class="gx-progress-value">{@percent}%</span>
+      <span class="gx-progress-track">
+        <span class="gx-progress-fill" style={"width: #{@percent}%"}></span>
+      </span>
+    </span>
+    """
+  end
+
   defp cell_content(assigns) do
     ~H"""
     <span class="gx-truncate">
@@ -1849,6 +1874,9 @@ defmodule GanttEx.Live.Components do
     ></span>
     """
   end
+
+  defp swatch_class({:status, status}),
+    do: "gx-swatch--status gx-progress--" <> String.replace(to_string(status), "_", "-")
 
   defp swatch_class({:summary, :bracket}), do: "gx-swatch--bracket"
   defp swatch_class({:summary, _style}), do: "gx-swatch--project"

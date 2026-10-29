@@ -683,10 +683,40 @@ defmodule GanttEx.Filter do
   defp past?(date, today), do: NaiveDateTime.compare(date, today) != :gt
 
   # Deadlines are inclusive days (see GanttEx.Live.Gantt)
-  defp past_deadline?(%Task{deadline: nil}, _today, _unit), do: false
+  defp past_deadline?(%{deadline: %NaiveDateTime{} = deadline}, today, unit),
+    do: past?(TaskForm.parse_end(deadline, unit), today)
 
-  defp past_deadline?(task, today, unit),
-    do: past?(TaskForm.parse_end(task.deadline, unit), today)
+  defp past_deadline?(_task, _today, _unit), do: false
+
+  @doc """
+  The status of a task on `today`: `:completed`, `:overdue` (not complete
+  and past its end or its deadline, as the `:overdue` status filter),
+  `:in_progress` or `:not_started`. Works with any map with `:progress`,
+  `:end_date` and `:deadline`.
+
+      iex> task = GanttEx.Task.new!(id: 1, start_date: ~D[2025-01-06], duration: 3, progress: 0.5)
+      iex> {:ok, task} = GanttEx.Store.schedule(task, :day)
+      iex> GanttEx.Filter.task_status(task, ~N[2025-01-07 10:00:00])
+      :in_progress
+      iex> GanttEx.Filter.task_status(task, ~D[2025-01-10])
+      :overdue
+      iex> GanttEx.Filter.task_status(%{task | progress: 1.0}, ~D[2025-01-10])
+      :completed
+  """
+  @spec task_status(map(), Date.t() | NaiveDateTime.t(), Dates.unit()) ::
+          :completed | :overdue | :in_progress | :not_started
+  def task_status(task, today, unit \\ :day)
+  def task_status(%{progress: progress}, _today, _unit) when progress >= 1, do: :completed
+
+  def task_status(task, today, unit) do
+    today = Dates.cast!(today)
+
+    cond do
+      past?(Map.get(task, :end_date), today) or past_deadline?(task, today, unit) -> :overdue
+      (Map.get(task, :progress) || 0) > 0 -> :in_progress
+      true -> :not_started
+    end
+  end
 
   defp overlaps?(%Task{start_date: nil}, _from, _to), do: false
 

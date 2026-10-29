@@ -679,6 +679,7 @@ defmodule GanttEx.Live.Gantt do
       ctx: %{
         id: a.id,
         myself: a.myself,
+        today: today,
         labels: a.labels,
         format: a.format,
         locale: a.labels_locale,
@@ -1080,6 +1081,21 @@ defmodule GanttEx.Live.Gantt do
       if(a.today_marker, do: %{key: "today", label: labels.today, kind: :today})
     ]
 
+    # the colors of the progress column
+    statuses =
+      if Enum.any?(a.columns, &(&1.field == :progress and is_nil(&1.inner_block))) do
+        [%{key: "group-progress", label: labels.progress, kind: :group}] ++
+          for status <- [:completed, :in_progress, :not_started, :overdue] do
+            %{
+              key: "status-#{String.replace(to_string(status), "_", "-")}",
+              label: Map.fetch!(labels, status),
+              kind: {:status, status}
+            }
+          end
+      else
+        []
+      end
+
     custom =
       a.legend_items
       |> Enum.map(&Map.new/1)
@@ -1115,7 +1131,7 @@ defmodule GanttEx.Live.Gantt do
       end)
       |> elem(0)
 
-    Enum.reject(builtin, &is_nil/1) ++ custom
+    Enum.reject(builtin, &is_nil/1) ++ statuses ++ custom
   end
 
   # Deadlines are inclusive days: a task due on the 10th may end on the 10th.

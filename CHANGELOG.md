@@ -24,10 +24,14 @@ Additions:
   also for the built-in ones (`%{id: :restriction, when: &(&1.progress < 1)}`)
 - `reveal: :always` on the `:actions` column shows the buttons on every row,
   not only on hover
+- `GanttEx.Filter.task_status/3`: completed, overdue, in progress or not
+  started
 
 Changes:
 
 - The header of the `:actions` column shows its label
+- The `:progress` column shows a bar of the color of the status of the task
+  (completed, in progress, not started, overdue), explained by the legend
 - The tree column has its own width, which the user resizes like the
   other columns: it grows with the free width of the grid but doesn't
   shrink below it, so a narrow grid clips the columns on its right
