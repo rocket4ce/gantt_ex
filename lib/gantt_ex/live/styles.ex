@@ -2747,9 +2747,10 @@ defmodule GanttEx.Live.Styles do
         pointer-events: none;
       }
 
+      /* under the label of the today marker, which may be on the band */
       .gx-plan-band-label {
         position: sticky;
-        top: calc(var(--gx-header-height, 64px) + 6px);
+        top: calc(var(--gx-header-height, 64px) + 30px);
         z-index: 4;
         display: block;
         width: max-content;

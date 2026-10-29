@@ -133,9 +133,13 @@ defmodule GanttEx.Live.Hook do
           this.viewport.addEventListener("scroll", this.onScroll, {passive: true})
           window.addEventListener("resize", this.onResize)
           this.reportViewport(true)
+          this.reportWidth()
 
           // The visible part of the timeline changes with the page layout too (side panels...)
-          this.resizeObserver = new ResizeObserver(() => this.fitQuickInfo())
+          this.resizeObserver = new ResizeObserver(() => {
+            this.fitQuickInfo()
+            this.reportWidth()
+          })
           this.resizeObserver.observe(this.viewport)
         },
 
@@ -173,6 +177,16 @@ defmodule GanttEx.Live.Hook do
           if ((force || nearTop || nearBottom) && key !== this.lastViewport) {
             this.lastViewport = key
             this.push("gx:viewport", {top, height})
+          }
+        },
+
+        // The width of the viewport: a lookahead stretches its days to fill it
+        reportWidth() {
+          if (!this.viewport) return
+          const width = Math.round(this.viewport.clientWidth)
+          if (width > 0 && width !== this.lastWidth) {
+            this.lastWidth = width
+            this.push("gx:width", {width})
           }
         },
 

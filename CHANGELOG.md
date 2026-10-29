@@ -32,6 +32,9 @@ Changes:
 - The header of the `:actions` column shows its label
 - The `:progress` column shows a bar of the color of the status of the task
   (completed, in progress, not started, overdue), explained by the legend
+- A lookahead fills the width of the viewport (its columns grow), and a
+  lookahead restored from the filter values switches to the `:day` zoom
+  level too. The label of the plans sits under the today marker
 - The tree column has its own width, which the user resizes like the
   other columns: it grows with the free width of the grid but doesn't
   shrink below it, so a narrow grid clips the columns on its right

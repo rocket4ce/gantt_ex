@@ -85,6 +85,33 @@ defmodule GanttEx.Live.LookaheadTest do
     assert has_element?(view, "#gantt-filters-toggle .gx-badge", "1")
   end
 
+  test "a restored lookahead is shown day by day too", %{conn: conn} do
+    {:ok, view, _html} =
+      mount_gantt(conn, filters: [:lookahead], filter_values: %{lookahead: 1}, zoom: :week)
+
+    assert has_element?(view, "#gantt-zoom-day[aria-pressed=true]")
+  end
+
+  test "its days fill the width of the viewport", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn, filters: [:lookahead], filter_values: %{lookahead: 1})
+    assert has_element?(view, "#gantt-chart[style*='width: 336px']")
+
+    view |> element("#gantt") |> render_hook("gx:width", %{"width" => 2000})
+
+    [_, width] = Regex.run(~r/--gx-column-width: (\d+)px/, render(view))
+    width = String.to_integer(width)
+    assert width > 48
+    assert has_element?(view, "#gantt-chart[style*='width: #{width * 7}px']")
+  end
+
+  test "without a lookahead the width of the viewport changes nothing", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn)
+    html = render(view)
+    view |> element("#gantt") |> render_hook("gx:width", %{"width" => 2000})
+    assert render(view) =~ "--gx-column-width: 48px"
+    assert html =~ "--gx-column-width: 48px"
+  end
+
   test "is not offered by default", %{conn: conn} do
     {:ok, view, _html} = mount_gantt(conn)
     refute has_element?(view, "#gantt-lookahead")

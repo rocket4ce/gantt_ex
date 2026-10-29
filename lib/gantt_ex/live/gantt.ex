@@ -364,6 +364,8 @@ defmodule GanttEx.Live.Gantt do
        labels_locale: nil,
        timeline: nil,
        viewport: %{top: 0, height: 900},
+       # the width of the viewport, reported by the hook (see build_timeline/5)
+       viewport_width: nil,
        history: History.new(),
        show_critical: nil,
        analysis: nil,
@@ -385,6 +387,8 @@ defmodule GanttEx.Live.Gantt do
   end
 
   def update(assigns, socket) do
+    previous_filters = socket.assigns.filter_state
+
     socket =
       socket
       |> assign(Map.drop(assigns, [:tasks, :links, :zoom_levels, :filter_values, :column_layout]))
@@ -394,9 +398,12 @@ defmodule GanttEx.Live.Gantt do
       |> assign_filter_values(assigns)
       |> assign_column_layout(assigns)
       |> assign_zoom()
-      |> prepare()
 
-    {:ok, socket}
+    # a lookahead restored from the filter values is read day by day too
+    socket =
+      lookahead_zoom(socket, previous_filters, socket.assigns.filter_state)
+
+    {:ok, prepare(socket)}
   end
 
   defp assign_defaults(socket, assigns) do
@@ -627,9 +634,9 @@ defmodule GanttEx.Live.Gantt do
     filtering = run_filters(a, today)
 
     rows = rows(a, filtering)
-    timeline = build_timeline(a, level, today, filtering.lookahead)
-    layout = layout(a, rows, timeline, bar_height)
     grid_width = grid_width(a, columns)
+    timeline = build_timeline(a, level, today, filtering.lookahead, grid_width)
+    layout = layout(a, rows, timeline, bar_height)
     chart_height = max(layout.height, 0)
     plans = plans(a, timeline)
 
@@ -675,7 +682,7 @@ defmodule GanttEx.Live.Gantt do
       marker_items: marker_items(a, timeline, today),
       plan_view: plans,
       legend_entries: a.legend && legend_entries(a, show_critical, plans),
-      root_style: root_style(a, columns, grid_width, bar_height, level),
+      root_style: root_style(a, columns, grid_width, bar_height, level, timeline),
       ctx: %{
         id: a.id,
         myself: a.myself,
@@ -954,7 +961,7 @@ defmodule GanttEx.Live.Gantt do
   defp today(%{today: nil}), do: NaiveDateTime.local_now() |> NaiveDateTime.truncate(:second)
   defp today(%{today: today}), do: Dates.cast!(today)
 
-  defp build_timeline(a, level, today, lookahead) do
+  defp build_timeline(a, level, today, lookahead, grid_width) do
     {start, finish} =
       case {Dates.cast!(a.start_date), Dates.cast!(a.end_date)} do
         {%NaiveDateTime{} = start, %NaiveDateTime{} = finish} ->
@@ -972,14 +979,32 @@ defmodule GanttEx.Live.Gantt do
           )
       end
 
-    Timeline.new(
-      scales: level.scales,
-      start_date: start,
-      end_date: finish,
-      column_width: level.column_width,
-      week_start: a.week_start
-    )
+    timeline =
+      Timeline.new(
+        scales: level.scales,
+        start_date: start,
+        end_date: finish,
+        column_width: level.column_width,
+        week_start: a.week_start
+      )
+
+    fit_lookahead(timeline, a, lookahead, grid_width)
   end
+
+  # The weeks of a lookahead fill the width of the viewport: their columns
+  # grow when the window is shorter than the visible timeline
+  defp fit_lookahead(timeline, %{viewport_width: viewport} = a, %{}, grid_width)
+       when is_number(viewport) do
+    available = viewport - if(a.show_grid, do: grid_width, else: 0)
+    columns = max(Timeline.column_count(timeline), 1)
+    width = div(max(available, 0), columns)
+
+    if width > timeline.column_width,
+      do: %{timeline | column_width: width},
+      else: timeline
+  end
+
+  defp fit_lookahead(timeline, _a, _lookahead, _grid_width), do: timeline
 
   defp decorate_bar(bar, a) do
     task = bar.task
@@ -1251,7 +1276,7 @@ defmodule GanttEx.Live.Gantt do
     Columns.available(a.column, a.labels, layout: state || a.column_state, readonly: a.readonly)
   end
 
-  defp root_style(a, columns, grid_width, bar_height, level) do
+  defp root_style(a, columns, grid_width, bar_height, level, timeline) do
     column_vars =
       columns
       |> Enum.with_index()
@@ -1260,7 +1285,7 @@ defmodule GanttEx.Live.Gantt do
     "--gx-row-height: #{a.row_height}px; --gx-bar-height: #{bar_height}px; " <>
       "--gx-scale-row-height: #{a.scale_height}px; --gx-height: #{safe_css(a.height, "640px")}; " <>
       "--gx-grid-width: #{if a.show_grid, do: grid_width, else: 0}px; " <>
-      "--gx-column-width: #{level.column_width}px; " <>
+      "--gx-column-width: #{timeline.column_width}px; " <>
       "--gx-header-height: #{length(level.scales) * a.scale_height}px; " <> column_vars
   end
 
@@ -1549,14 +1574,29 @@ defmodule GanttEx.Live.Gantt do
   end
 
   def handle_event("lookahead", %{"weeks" => weeks}, socket) do
-    state = socket.assigns.filter_state
+    previous = socket.assigns.filter_state
 
     state =
       if weeks in ["", nil],
-        do: Map.delete(state, :lookahead),
-        else: Map.put(state, :lookahead, weeks)
+        do: Map.delete(previous, :lookahead),
+        else: Map.put(previous, :lookahead, weeks)
 
-    {:noreply, socket |> lookahead_zoom(state) |> put_filters(state)}
+    {:noreply, socket |> lookahead_zoom(previous, state) |> put_filters(state)}
+  end
+
+  # The width of the viewport only matters to a lookahead (see fit_lookahead/4)
+  def handle_event("gx:width", %{"width" => width}, socket) do
+    case Interaction.number(width) do
+      width when is_number(width) and width > 0 ->
+        socket = assign(socket, :viewport_width, min(round(width), 20_000))
+
+        if socket.assigns.filtering.lookahead,
+          do: {:noreply, prepare(socket)},
+          else: {:noreply, socket}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("key", %{"key" => key}, socket) do
@@ -2405,8 +2445,9 @@ defmodule GanttEx.Live.Gantt do
   defp find_filter(a, id),
     do: a |> filter_definitions(true) |> Enum.find(&(to_string(&1.id) == id))
 
-  # A lookahead is read day by day: coarser scales switch to the :day level.
-  defp lookahead_zoom(socket, state) do
+  # A lookahead is read day by day: coarser scales switch to the :day level
+  # when it starts (chosen in the menu or restored from the filter values).
+  defp lookahead_zoom(socket, previous, state) do
     a = socket.assigns
     minor = List.last(Zoom.find(a.zoom_levels, a.zoom_name).scales)
 
@@ -2414,7 +2455,7 @@ defmodule GanttEx.Live.Gantt do
       Enum.find(a.zoom_levels, &(&1.name == :day)) ||
         Enum.find(a.zoom_levels, &(List.last(&1.scales).unit == :day))
 
-    if Map.has_key?(state, :lookahead) and not Map.has_key?(a.filter_state, :lookahead) and
+    if Map.has_key?(state, :lookahead) and not Map.has_key?(previous, :lookahead) and
          minor.unit not in [:minute, :hour, :day] and day_level != nil,
        do: assign(socket, zoom_name: day_level.name),
        else: socket
