@@ -11,6 +11,18 @@ defmodule GanttEx.Live.NavigationTest do
     assert_gantt_event(%GanttEx.Event{type: :task_selected, gantt_id: "gantt", task: %{id: 2}})
   end
 
+  test "clicking a row takes the chart to its bar", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn)
+    view |> element("#gantt-row-3") |> render_click()
+    assert_push_event(view, "gantt_ex:scroll", %{id: "gantt", key: "3", x: x, width: width})
+    assert_in_delta x, style_px(view, "#gantt-bar-3", "--gx-x"), 0.01
+    assert_in_delta width, style_px(view, "#gantt-bar-3", "--gx-w"), 0.01
+
+    # the clicked bar is already in view
+    view |> element("#gantt-bar-2") |> render_click()
+    refute_push_event(view, "gantt_ex:scroll", %{key: "2"})
+  end
+
   test "clicking a bar opens the quick info", %{conn: conn} do
     {:ok, view, _html} = mount_gantt(conn)
 
@@ -88,7 +100,8 @@ defmodule GanttEx.Live.NavigationTest do
 
       view |> element("#gantt-viewport") |> render_keydown(%{"key" => "ArrowDown"})
       assert has_element?(view, "#gantt-row-2.gx-row--selected")
-      assert_push_event(view, "gantt_ex:scroll", %{id: "gantt", y: 36, height: 36})
+      assert_push_event(view, "gantt_ex:scroll", %{id: "gantt", y: 36, height: 36, x: x})
+      assert_in_delta x, style_px(view, "#gantt-bar-2", "--gx-x"), 0.01
 
       view |> element("#gantt-viewport") |> render_keydown(%{"key" => "End"})
       assert has_element?(view, "#gantt-row-4.gx-row--selected")

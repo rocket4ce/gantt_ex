@@ -39,6 +39,9 @@ Changes:
   other columns: it grows with the free width of the grid but doesn't
   shrink below it, so a narrow grid clips the columns on its right
   instead of the task names
+- Selecting a task from the grid (a click on its row or keyboard
+  navigation) scrolls the chart to its bar when it is out of view, and a
+  click makes the bar pulse
 
 ## 0.3.0 (2026-10-28)
 

@@ -43,6 +43,7 @@ defmodule GanttEx.Live.Hook do
 
       const px = (el, name) => parseFloat(el.style.getPropertyValue(name)) || 0
       const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
+      const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
       const svgEl = (tag, attrs) => {
         const el = document.createElementNS("http://www.w3.org/2000/svg", tag)
         for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value)
@@ -590,18 +591,48 @@ defmodule GanttEx.Live.Hook do
           else this.el.classList.toggle("gx-root--fullscreen")
         },
 
-        scrollTo({x, y, height}) {
+        // x alone centers a date; with a width it brings a bar into view (centered when it
+        // fits, else from its start) unless it is already there, and a key makes it pulse.
+        scrollTo({x, y, height, width, key}) {
           const vp = this.viewport
           const header = vp.querySelector(".gx-header")?.offsetHeight || 0
           const grid = vp.querySelector("[data-gx-grid]")?.offsetWidth || 0
-          if (typeof x === "number") {
-            vp.scrollTo({left: Math.max(x + grid - (vp.clientWidth + grid) / 2, 0), behavior: "smooth"})
-          }
+          const behavior = reducedMotion() ? "auto" : "smooth"
           if (typeof y === "number") {
             const visible = vp.clientHeight - header
             if (y < vp.scrollTop) vp.scrollTop = y
             else if (y + height > vp.scrollTop + visible) vp.scrollTop = y + height - visible
           }
+          if (typeof x === "number") {
+            // the part of the chart that the grid does not cover
+            const visible = vp.clientWidth - grid
+            if (typeof width !== "number") {
+              vp.scrollTo({left: Math.max(x - visible / 2, 0), behavior})
+            } else {
+              const margin = Math.min(48, visible / 8)
+              const left = vp.scrollLeft
+              if (x < left + margin || x + width > left + visible - margin) {
+                const target = width <= visible - 2 * margin ? x + width / 2 - visible / 2 : x - margin
+                vp.scrollTo({left: Math.max(target, 0), behavior})
+              }
+            }
+          }
+          if (key) this.pulseBar(key)
+        },
+
+        pulseBar(key) {
+          if (reducedMotion()) return
+          const accent = getComputedStyle(this.el).getPropertyValue("--gx-accent").trim() || "#2563eb"
+          this.el.querySelectorAll(`[data-gx-bar="${CSS.escape(key)}"] .gx-bar-body`).forEach((body) => {
+            body.animate(
+              [
+                {filter: `drop-shadow(0 0 0 ${accent})`},
+                {filter: `drop-shadow(0 0 7px ${accent})`, offset: 0.4},
+                {filter: `drop-shadow(0 0 0 transparent)`}
+              ],
+              {duration: 700, iterations: 2, easing: "ease-out"}
+            )
+          })
         },
 
         async download({filename, mime, content, convert}) {

@@ -1513,11 +1513,14 @@ defmodule GanttEx.Live.Gantt do
   def handle_event("select", %{"key" => key} = params, socket) do
     from_bar? = params["source"] == "bar"
 
-    {:noreply,
-     socket
-     |> select_task(key, from_bar?)
-     |> assign(quick_info_offset: if(from_bar?, do: Interaction.number(params["offset"])))
-     |> prepare()}
+    socket =
+      socket
+      |> select_task(key, from_bar?)
+      |> assign(quick_info_offset: if(from_bar?, do: Interaction.number(params["offset"])))
+      |> prepare()
+
+    # a row of the grid takes the chart to its bar (a clicked bar is already in view)
+    {:noreply, if(from_bar?, do: socket, else: locate_bar(socket, key))}
   end
 
   def handle_event("toggle", %{"key" => key}, socket) do
@@ -2006,7 +2009,7 @@ defmodule GanttEx.Live.Gantt do
           assign(socket, editing: {key, column.field}, quick_info_key: nil)
 
         true ->
-          select_task(socket, key, false)
+          socket |> select_task(key, false) |> locate_bar(key)
       end
 
     {:noreply, prepare(socket)}
@@ -2771,12 +2774,41 @@ defmodule GanttEx.Live.Gantt do
       row ->
         socket
         |> select_task(row.key, false)
-        |> push_event("gantt_ex:scroll", %{
-          id: socket.assigns.id,
-          y: row.index * socket.assigns.row_height,
-          height: socket.assigns.row_height
-        })
+        |> push_event(
+          "gantt_ex:scroll",
+          Map.merge(bar_span(socket.assigns, row.key), %{
+            id: socket.assigns.id,
+            y: row.index * socket.assigns.row_height,
+            height: socket.assigns.row_height
+          })
+        )
         |> prepare()
+    end
+  end
+
+  # Scrolls the chart to the bar of a task, when it has one in the timeline, and
+  # makes it pulse so the eye finds it.
+  defp locate_bar(socket, key) do
+    case bar_span(socket.assigns, key) do
+      span when span == %{} ->
+        socket
+
+      span ->
+        push_event(socket, "gantt_ex:scroll", Map.merge(span, %{id: socket.assigns.id, key: key}))
+    end
+  end
+
+  # The horizontal extent of the bar (and its segments) of a task, within the chart.
+  defp bar_span(a, key) do
+    spans = for bar <- a.bars, bar.key == key, do: {bar.x, bar.x + bar.width}
+
+    with [_ | _] <- spans,
+         from = spans |> Enum.map(&elem(&1, 0)) |> Enum.min() |> max(0),
+         to = spans |> Enum.map(&elem(&1, 1)) |> Enum.max() |> min(a.chart_width),
+         true <- to >= from do
+      %{x: from, width: to - from}
+    else
+      _ -> %{}
     end
   end
 
