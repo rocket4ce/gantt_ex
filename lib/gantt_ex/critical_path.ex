@@ -106,6 +106,31 @@ defmodule GanttEx.CriticalPath do
   end
 
   @doc """
+  Whether `task` is near-critical: off the critical path, but with a total
+  slack of `threshold` duration units or less, so a short delay puts it on
+  the path. Projects and finished tasks never are.
+
+      iex> store = GanttEx.Store.new!([%{id: 1, start_date: ~D[2025-01-06], duration: 5}, %{id: 2, start_date: ~D[2025-01-06], duration: 2}])
+      iex> analysis = GanttEx.CriticalPath.analyze(store)
+      iex> task = GanttEx.Store.get_task(store, 2)
+      iex> {analysis.tasks[2].total_slack, GanttEx.CriticalPath.near_critical?(analysis, task, 3), GanttEx.CriticalPath.near_critical?(analysis, task, 2)}
+      {3, true, false}
+      iex> GanttEx.CriticalPath.near_critical?(analysis, GanttEx.Store.get_task(store, 1), 3)
+      false
+  """
+  @spec near_critical?(t() | nil, Task.t(), pos_integer() | nil) :: boolean()
+  def near_critical?(%{tasks: tasks}, %Task{} = task, threshold)
+      when is_integer(threshold) and threshold > 0 do
+    task.type != :project and task.progress < 1 and
+      match?(
+        %{critical: false, total_slack: slack} when slack > 0 and slack <= threshold,
+        Map.get(tasks, task.id)
+      )
+  end
+
+  def near_critical?(_analysis, _task, _threshold), do: false
+
+  @doc """
   What the analysis of a store depends on: the tree, the links, the
   calendars and the dates, durations, types and calendars of the tasks.
   Stores with the same inputs have the same analysis, so a chart doesn't run

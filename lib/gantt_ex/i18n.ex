@@ -183,6 +183,7 @@ defmodule GanttEx.I18n do
         completed: gettext("Completed"),
         overdue: gettext("Overdue"),
         critical: gettext("Critical"),
+        near_critical: gettext("Near-critical"),
         restricted: gettext("With restrictions"),
         # filters
         filters: gettext("Filters"),

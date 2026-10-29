@@ -27,6 +27,26 @@ defmodule GanttEx.Live.CriticalPathLiveTest do
     refute has_element?(view, ".gx-bar--critical")
   end
 
+  test "tasks with little slack are marked as near-critical", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn, critical_path: true, near_critical: 2, legend: true)
+
+    # Design and Build have two days of slack before Launch, which is critical
+    assert has_element?(view, "#gantt-bar-2.gx-bar--near-critical")
+    assert has_element?(view, "#gantt-bar-3.gx-bar--near-critical")
+    refute has_element?(view, "#gantt-bar-4.gx-bar--near-critical")
+    refute has_element?(view, "#gantt-bar-1.gx-bar--near-critical")
+    assert has_element?(view, "#gantt-legend-near-critical", "Near-critical (≤ 2 days)")
+
+    # hidden with the critical path
+    view |> element("#gantt-critical-path") |> render_click()
+    refute has_element?(view, ".gx-bar--near-critical")
+    refute has_element?(view, "#gantt-legend-near-critical")
+
+    # one day of slack is not enough to mark them
+    {:ok, view, _html} = mount_gantt(conn, critical_path: true, near_critical: 1)
+    refute has_element?(view, ".gx-bar--near-critical")
+  end
+
   test "free slack is drawn after the bars", %{conn: conn} do
     # Build ends on Jan 14, Launch is on Jan 16: two days of free slack
     {:ok, view, _html} = mount_gantt(conn, show_slack: true)

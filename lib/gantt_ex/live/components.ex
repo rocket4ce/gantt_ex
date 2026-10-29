@@ -1532,6 +1532,7 @@ defmodule GanttEx.Live.Components do
         @bar.selected && "gx-bar--selected",
         @bar.drag == "none" && "gx-bar--locked",
         @bar[:critical] && "gx-bar--critical",
+        @bar[:near_critical] && "gx-bar--near-critical",
         @bar[:segment] && "gx-bar--segment",
         @bar[:deadline] && @bar.deadline.overdue && "gx-bar--overdue",
         @bar.task.blocked && "gx-bar--blocked",

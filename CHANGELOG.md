@@ -11,6 +11,11 @@ Additions:
   starts on Friday. `:shrink` shrinks it to the previous one, as MS
   Project does. Moving a bar is unchanged (it starts on the next working
   day). `GanttEx.Store.schedule/5` takes it as an option
+- `:near_critical` option of the chart: while the critical path is shown,
+  the tasks off it with a total slack of this many units or less are marked
+  (a dashed orange outline): a short delay would put them on the path. The
+  legend explains them ("Near-critical (≤ 5 days)") and the status filter
+  offers them. `GanttEx.CriticalPath.near_critical?/3` tells them apart
 
 Changes:
 

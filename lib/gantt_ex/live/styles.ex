@@ -2037,6 +2037,21 @@ defmodule GanttEx.Live.Styles do
         border-color: var(--gx-critical-progress, #9f1239);
       }
 
+      /* near-critical: off the critical path, but with little slack */
+      .gx-bar--near-critical .gx-bar-body {
+        outline: 2px dashed var(--gx-near-critical, #f97316);
+        outline-offset: 2px;
+      }
+
+      .gx-bar--milestone.gx-bar--near-critical .gx-bar-body {
+        outline: none;
+      }
+
+      .gx-bar--milestone.gx-bar--near-critical .gx-bar-body::before {
+        outline: 2px dashed var(--gx-near-critical, #f97316);
+        outline-offset: 2px;
+      }
+
       .gx-link--critical {
         color: var(--gx-critical, #e11d48);
       }
@@ -3060,6 +3075,12 @@ defmodule GanttEx.Live.Styles do
 
       .gx-swatch--critical {
         background: var(--gx-critical, #e11d48);
+      }
+
+      .gx-swatch--near-critical {
+        background: transparent;
+        outline: 2px dashed var(--gx-near-critical, #f97316);
+        outline-offset: -2px;
       }
 
       .gx-swatch--baseline {

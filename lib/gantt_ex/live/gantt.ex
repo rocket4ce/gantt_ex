@@ -69,6 +69,11 @@ defmodule GanttEx.Live.Gantt do
       possible date. Defaults to `false`.
     * `:critical_path` - highlight the critical path (see `GanttEx.CriticalPath`).
       The toolbar has a toggle for it. Defaults to `false`.
+    * `:near_critical` - while the critical path is shown, also mark the
+      near-critical tasks: off the path, with a total slack of this many
+      duration units or less, so a short delay would put them on it (see
+      `GanttEx.CriticalPath.near_critical?/3`). The legend explains them and
+      the status filter offers them. Defaults to `nil` (not marked).
     * `:show_slack` - draw the free slack of each task after its bar.
       Defaults to `false`.
     * `:resources` - the resources tasks are assigned to (see `GanttEx.Resource`).
@@ -292,6 +297,7 @@ defmodule GanttEx.Live.Gantt do
     auto_scheduling: false,
     auto_scheduling_strict: false,
     critical_path: false,
+    near_critical: nil,
     show_slack: false,
     baselines: false,
     resources: [],
@@ -584,7 +590,13 @@ defmodule GanttEx.Live.Gantt do
   # Values are kept against every status, so a critical filter survives
   # hiding the critical path (it is ignored meanwhile).
   defp filter_definitions(a, critical),
-    do: Filter.definitions(a.filters, a.labels, critical: critical)
+    do:
+      Filter.definitions(a.filters, a.labels,
+        critical: critical,
+        near_critical: critical and near_critical?(a)
+      )
+
+  defp near_critical?(a), do: is_integer(a.near_critical) and a.near_critical > 0
 
   defp assign_zoom(%{assigns: assigns} = socket) do
     if assigns.zoom != assigns.zoom_attr or is_nil(assigns.zoom_name) do
@@ -882,7 +894,8 @@ defmodule GanttEx.Live.Gantt do
       end
 
     key =
-      {a.store, values, a.filter, :critical in statuses and a.analysis,
+      {a.store, values, a.filter,
+       (:critical in statuses or :near_critical in statuses) and {a.analysis, a.near_critical},
        :overdue in statuses and today, lookahead}
 
     {visible, matched} =
@@ -898,6 +911,7 @@ defmodule GanttEx.Live.Gantt do
             week_start: a.week_start,
             unit: a.duration_unit,
             analysis: a.analysis,
+            near_critical: a.near_critical,
             index: index,
             wbs: wbs,
             filter: a.filter
@@ -1033,6 +1047,8 @@ defmodule GanttEx.Live.Gantt do
       critical:
         a.show_critical and a.analysis != nil and
           match?(%{critical: true}, a.analysis.tasks[task.id]),
+      near_critical:
+        a.show_critical and CriticalPath.near_critical?(a.analysis, task, a.near_critical),
       slack_width: slack_width(task, a)
     })
   end
@@ -1106,6 +1122,14 @@ defmodule GanttEx.Live.Gantt do
       %{key: "project", label: labels.project, kind: {:summary, a.summary_bars}},
       %{key: "milestone", label: labels.milestone, kind: :milestone},
       if(show_critical, do: %{key: "critical", label: labels.critical_path, kind: :critical}),
+      if(show_critical and near_critical?(a),
+        do: %{
+          key: "near-critical",
+          label:
+            "#{labels.near_critical} (≤ #{GanttEx.I18n.duration(a.near_critical, a.duration_unit, labels.locale)})",
+          kind: :near_critical
+        }
+      ),
       if(a.baselines, do: %{key: "baseline", label: labels.baseline, kind: :baseline}),
       %{key: "deadline", label: labels.deadline, kind: :deadline},
       %{key: "overdue", label: labels.overdue, kind: :overdue},

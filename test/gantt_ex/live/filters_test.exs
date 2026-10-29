@@ -149,6 +149,20 @@ defmodule GanttEx.Live.FiltersTest do
       assert "4" in shown_rows(view)
     end
 
+    test "offers the near-critical status with a threshold", %{conn: conn} do
+      {:ok, view, _html} = mount_gantt(conn, critical_path: true, near_critical: 2)
+      open_filters(view)
+      assert has_element?(view, "#gantt-filter-status input[value=near_critical]")
+
+      # Design and Build end two days before they would delay Launch
+      change_filters(view, %{"filters" => %{"status" => ["near_critical"]}})
+      assert shown_rows(view) == ["1", "2", "3"]
+
+      {:ok, view, _html} = mount_gantt(conn, critical_path: true)
+      open_filters(view)
+      refute has_element?(view, "#gantt-filter-status input[value=near_critical]")
+    end
+
     test "filters by type", %{conn: conn} do
       {:ok, view, _html} = mount_gantt(conn)
       open_filters(view)

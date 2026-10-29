@@ -14,9 +14,10 @@ defmodule GanttEx.Filter do
     * `:search` - the text or the WBS code of the tasks, ignoring case and
       accents. A WBS code such as `"1.2"` also matches the tasks below it.
     * `:status` - not started, in progress, completed, overdue (not
-      complete and past its end or its deadline), critical (only offered
-      while the critical path is shown), blocked and with open restrictions
-      (see `GanttEx.Task`)
+      complete and past its end or its deadline), critical and near-critical
+      (only offered while the critical path is shown, the second one when the
+      chart has a `:near_critical` threshold), blocked and with open
+      restrictions (see `GanttEx.Task`)
     * `:type` - tasks, projects and milestones
     * `:dates` - tasks overlapping a range of days
     * `:lookahead` - tasks overlapping the next weeks (Last Planner
@@ -99,7 +100,16 @@ defmodule GanttEx.Filter do
   @defaults [:search, :status, :type, :dates]
   @builtins @defaults ++ [:lookahead]
   @lookahead_weeks [1, 2, 3, 4, 6]
-  @statuses [:not_started, :in_progress, :completed, :overdue, :critical, :blocked, :restricted]
+  @statuses [
+    :not_started,
+    :in_progress,
+    :completed,
+    :overdue,
+    :critical,
+    :near_critical,
+    :blocked,
+    :restricted
+  ]
   @none "__none__"
   @searchable_above 8
 
@@ -138,7 +148,10 @@ defmodule GanttEx.Filter do
     * `:today` - the current date, for `:overdue` and `:lookahead`. Defaults to now.
     * `:week_start` - the first ISO day of the week, for `:lookahead`. Defaults to `1`.
     * `:unit` - the duration unit, to know when a deadline is past. Defaults to `:day`.
-    * `:analysis` - a `GanttEx.CriticalPath.analyze/1` result, for `:critical`.
+    * `:analysis` - a `GanttEx.CriticalPath.analyze/1` result, for `:critical`
+      and `:near_critical`.
+    * `:near_critical` - the slack threshold of `:near_critical` (see
+      `GanttEx.CriticalPath.near_critical?/3`).
     * `:wbs` - the WBS codes (`GanttEx.Store.wbs_codes/1`), for the search.
     * `:index` - a `search_index/2`, to avoid normalizing texts on every search.
     * `:filter` - a 1-arity function that must also return `true` (the
@@ -149,6 +162,7 @@ defmodule GanttEx.Filter do
           optional(:unit) => Dates.unit(),
           optional(:week_start) => 1..7,
           optional(:analysis) => map() | nil,
+          optional(:near_critical) => pos_integer() | nil,
           optional(:wbs) => %{Task.id() => String.t()},
           optional(:index) => search_index(),
           optional(:filter) => (Task.t() -> boolean()) | nil
@@ -167,7 +181,7 @@ defmodule GanttEx.Filter do
   Returns the statuses of the `:status` filter.
 
       iex> GanttEx.Filter.statuses()
-      [:not_started, :in_progress, :completed, :overdue, :critical, :blocked, :restricted]
+      [:not_started, :in_progress, :completed, :overdue, :critical, :near_critical, :blocked, :restricted]
   """
   @spec statuses() :: [atom()]
   def statuses, do: @statuses
@@ -183,6 +197,7 @@ defmodule GanttEx.Filter do
   ## Options
 
     * `:critical` - offer the `:critical` status. Defaults to `false`.
+    * `:near_critical` - offer the `:near_critical` status. Defaults to `false`.
 
   ## Examples
 
@@ -249,8 +264,11 @@ defmodule GanttEx.Filter do
     do: base(:search, labels.search_tasks, %{placeholder: labels.search_tasks})
 
   defp builtin(:status, labels, opts) do
-    statuses =
-      if Keyword.get(opts, :critical, false), do: @statuses, else: @statuses -- [:critical]
+    hidden =
+      if(Keyword.get(opts, :critical, false), do: [], else: [:critical]) ++
+        if Keyword.get(opts, :near_critical, false), do: [], else: [:near_critical]
+
+    statuses = @statuses -- hidden
 
     base(:status, labels.status, %{options: Enum.map(statuses, &status_option(&1, labels))})
   end
@@ -300,6 +318,7 @@ defmodule GanttEx.Filter do
         :completed -> {"var(--gx-success)", nil}
         :overdue -> {"var(--gx-danger)", nil}
         :critical -> {"var(--gx-critical, #e11d48)", nil}
+        :near_critical -> {"var(--gx-near-critical, #f97316)", nil}
         :blocked -> {nil, :lock_closed}
         :restricted -> {nil, :exclamation_triangle}
       end
@@ -667,6 +686,17 @@ defmodule GanttEx.Filter do
     case ctx[:analysis] do
       %{tasks: tasks} -> &match?(%{critical: true}, Map.get(tasks, &1.id))
       _ -> fn _task -> false end
+    end
+  end
+
+  defp status_predicate(:near_critical, ctx) do
+    case ctx[:analysis] do
+      %{} = analysis ->
+        threshold = ctx[:near_critical]
+        &GanttEx.CriticalPath.near_critical?(analysis, &1, threshold)
+
+      _ ->
+        fn _task -> false end
     end
   end
 
