@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+Additions:
+
+- `:resize_snap` option of the chart and of `GanttEx.Store.new/3`: with
+  working time, where a bar resized onto a non-working day ends.
+  `:extend` (the default) grows the task to the next working day: an end
+  stretched over Saturday ends on Monday, a start pulled back to Sunday
+  starts on Friday. `:shrink` shrinks it to the previous one, as MS
+  Project does. Moving a bar is unchanged (it starts on the next working
+  day). `GanttEx.Store.schedule/5` takes it as an option
+
+Changes:
+
+- An end edited onto a non-working day (resized or typed) no longer
+  leaves the bar covering days nobody works, and resizing the start onto
+  one no longer shortens the task
+- Changing the calendar of a task keeps its working duration and moves
+  its end, instead of keeping the dates and changing the duration
+
 Fixes:
 
 - Ending a lookahead (the menu, its chip, clearing the filters) goes back

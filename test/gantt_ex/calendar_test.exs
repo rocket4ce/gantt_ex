@@ -90,6 +90,55 @@ defmodule GanttEx.CalendarTest do
              {~N[2025-01-09 00:00:00], ~N[2025-01-16 00:00:00], 5}
   end
 
+  test "a new calendar keeps the working duration and moves the end" do
+    store =
+      Store.new!([%{id: 1, start_date: ~D[2025-01-09], duration: 4}], [],
+        work_time: true,
+        calendars: [[id: "all_days", work_days: 1..7]]
+      )
+
+    # Thu 9, Fri 10, Mon 13, Tue 14 -> Thu 9 to Sun 12
+    {:ok, store, _changes} = Store.update_task(store, 1, %{calendar_id: "all_days"})
+    task = Store.get_task(store, 1)
+    assert {task.end_date, task.duration} == {~N[2025-01-13 00:00:00], 4}
+
+    {:ok, store, _changes} = Store.update_task(store, 1, %{calendar_id: nil})
+    assert Store.get_task(store, 1).end_date == ~N[2025-01-15 00:00:00]
+  end
+
+  test "an end resized onto a holiday snaps too, as long as it stays after the start" do
+    store =
+      Store.new!([%{id: 1, start_date: ~D[2025-01-06], duration: 1}], [],
+        work_time: true,
+        calendar: [holidays: [~D[2025-01-07]]],
+        resize_snap: :shrink
+      )
+
+    # the end over the holiday of Tue 7: back to Mon 6
+    {:ok, store, _changes} = Store.update_task(store, 1, %{end_date: ~D[2025-01-08]})
+    assert Store.get_task(store, 1).end_date == ~N[2025-01-07 00:00:00]
+
+    # a task that only covers non-working days keeps its end
+    task = GanttEx.Task.new!(id: 2, start_date: ~D[2025-01-11], end_date: ~D[2025-01-13])
+    {:ok, task} = Store.schedule(task, :day, [:end_date], Calendar.new!(), resize_snap: :shrink)
+    assert task.end_date == ~N[2025-01-13 00:00:00]
+  end
+
+  test "hour durations don't snap the edges" do
+    store =
+      Store.new!([%{id: 1, start_date: ~N[2025-01-10 08:00:00], duration: 8}], [],
+        duration_unit: :hour,
+        work_time: true
+      )
+
+    {:ok, store, _changes} = Store.update_task(store, 1, %{end_date: ~N[2025-01-11 12:00:00]})
+    assert Store.get_task(store, 1).end_date == ~N[2025-01-11 12:00:00]
+  end
+
+  test "an invalid resize_snap is rejected" do
+    assert_raise ArgumentError, fn -> Store.new([], [], resize_snap: :sideways) end
+  end
+
   test "long durations skip whole weeks, but not the exceptions inside them" do
     calendar = Calendar.new!(holidays: [~D[2025-03-03]], working_dates: [~D[2025-03-15]])
     start = ~N[2025-01-06 00:00:00]

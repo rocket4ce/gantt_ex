@@ -46,6 +46,10 @@ defmodule GanttEx.Live.Gantt do
     * `:calendar` - the global working calendar: a `GanttEx.Calendar` or its
       options (`work_days`, `hours`, `holidays`, `working_dates`).
     * `:calendars` - more calendars, referenced by the `:calendar_id` of tasks.
+    * `:resize_snap` - with working time, where a bar resized onto a
+      non-working day ends: `:extend` grows the task to the next working
+      day, `:shrink` shrinks it to the previous one, as MS Project does.
+      Defaults to `:extend` (see `GanttEx.Store.schedule/5`).
 
   Behaviour:
 
@@ -277,6 +281,7 @@ defmodule GanttEx.Live.Gantt do
     work_time: false,
     calendar: nil,
     calendars: [],
+    resize_snap: :extend,
     markers: [],
     today_marker: false,
     plans: [],
@@ -433,6 +438,7 @@ defmodule GanttEx.Live.Gantt do
       work_time: socket.assigns.work_time,
       calendar: socket.assigns.calendar,
       calendars: socket.assigns.calendars,
+      resize_snap: socket.assigns.resize_snap,
       auto_types: socket.assigns.auto_types
     ]
 

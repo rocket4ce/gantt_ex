@@ -44,7 +44,8 @@ defmodule GanttEx.Store do
             work_time: false,
             calendar: nil,
             calendars: %{},
-            auto_types: false
+            auto_types: false,
+            resize_snap: :extend
 
   @typedoc "A string version of an id, as used in the DOM and in client events."
   @type key :: String.t()
@@ -88,8 +89,16 @@ defmodule GanttEx.Store do
           work_time: boolean(),
           calendar: Calendar.t() | nil,
           calendars: %{term() => Calendar.t()},
-          auto_types: boolean()
+          auto_types: boolean(),
+          resize_snap: resize_snap()
         }
+
+  @typedoc """
+  Where an edited edge that falls on a non-working day goes: the task grows
+  to the next working day (`:extend`) or shrinks to the previous one
+  (`:shrink`). See `schedule/5`.
+  """
+  @type resize_snap :: :extend | :shrink
 
   @typedoc "A visible row, as returned by `rows/2`."
   @type row :: %{
@@ -122,6 +131,10 @@ defmodule GanttEx.Store do
     * `:calendar` - the global calendar (a `GanttEx.Calendar` or its options).
       Defaults to Monday to Friday, 08:00-12:00 and 13:00-17:00.
     * `:calendars` - other calendars, referenced by the `:calendar_id` of tasks.
+    * `:resize_snap` - with working time, where a start or an end edited onto
+      a non-working day goes: `:extend` (the default) grows the task to the
+      next working day, `:shrink` shrinks it to the previous one, as MS
+      Project does. See `schedule/5`.
     * `:auto_types` - tasks with children become projects and projects without
       children become tasks, also after every mutation. Defaults to `false`.
 
@@ -224,6 +237,10 @@ defmodule GanttEx.Store do
 
   defp base_store(opts) do
     work_time = Keyword.get(opts, :work_time, false)
+    resize_snap = Keyword.get(opts, :resize_snap, :extend)
+
+    unless resize_snap in [:extend, :shrink],
+      do: raise(ArgumentError, "invalid :resize_snap #{inspect(resize_snap)}")
 
     with {:ok, calendar} <- Calendar.new(Keyword.get(opts, :calendar) || []),
          {:ok, calendars} <- cast_calendars(Keyword.get(opts, :calendars, [])) do
@@ -233,7 +250,8 @@ defmodule GanttEx.Store do
          work_time: work_time,
          calendar: if(work_time, do: calendar),
          calendars: calendars,
-         auto_types: Keyword.get(opts, :auto_types, false)
+         auto_types: Keyword.get(opts, :auto_types, false),
+         resize_snap: resize_snap
        }}
     end
   end
@@ -368,24 +386,64 @@ defmodule GanttEx.Store do
       iex> task = GanttEx.Task.new!(id: 1, start_date: ~D[2025-01-05], end_date: ~D[2025-01-01])
       iex> GanttEx.Store.schedule(task, :day)
       {:error, {:invalid, :end_date}}
-  """
-  @spec schedule(Task.t(), Dates.unit(), [atom()], Calendar.t() | nil) ::
-          {:ok, Task.t()} | {:error, Task.error()}
-  def schedule(task, unit, changed \\ [], calendar \\ nil)
 
-  def schedule(%Task{type: :milestone} = task, unit, _changed, calendar) do
+  `changed` holds the fields just edited, which decide what gives way: a
+  new start alone moves the task (the duration stays), a new end resizes
+  it, a new duration or calendar moves the end.
+
+  With a calendar, a start alone that falls on a non-working day goes
+  forward to the next working day. With the `:day` unit, an edited end on a
+  non-working day, or a start edited together with the end (resizing the
+  start), snap as `opts[:resize_snap]` says:
+
+    * `:extend` (the default) - the task grows: an end on Saturday goes to
+      the end of Monday, a start on Sunday to the start of Friday
+    * `:shrink` - the task shrinks, as MS Project does: the end goes back to
+      the end of Friday, the start forward to Monday
+
+  For example, stretching the end of a task that starts on Thursday over
+  Saturday (the end date is exclusive: Sunday at 00:00):
+
+      iex> calendar = GanttEx.Calendar.new!()
+      iex> task = GanttEx.Task.new!(id: 1, start_date: ~D[2025-01-09], end_date: ~D[2025-01-12])
+      iex> {:ok, extended} = GanttEx.Store.schedule(task, :day, [:end_date], calendar)
+      iex> {extended.end_date, extended.duration}
+      {~N[2025-01-14 00:00:00], 3}
+      iex> {:ok, shrunk} = GanttEx.Store.schedule(task, :day, [:end_date], calendar, resize_snap: :shrink)
+      iex> {shrunk.end_date, shrunk.duration}
+      {~N[2025-01-11 00:00:00], 2}
+
+  And its start, back to Sunday:
+
+      iex> calendar = GanttEx.Calendar.new!()
+      iex> task = GanttEx.Task.new!(id: 1, start_date: ~D[2025-01-12], end_date: ~D[2025-01-16])
+      iex> {:ok, extended} = GanttEx.Store.schedule(task, :day, [:start_date, :end_date], calendar)
+      iex> {extended.start_date, extended.duration}
+      {~N[2025-01-10 00:00:00], 4}
+      iex> {:ok, shrunk} = GanttEx.Store.schedule(task, :day, [:start_date, :end_date], calendar, resize_snap: :shrink)
+      iex> {shrunk.start_date, shrunk.duration}
+      {~N[2025-01-13 00:00:00], 3}
+  """
+  @spec schedule(Task.t(), Dates.unit(), [atom()], Calendar.t() | nil, keyword()) ::
+          {:ok, Task.t()} | {:error, Task.error()}
+  def schedule(task, unit, changed \\ [], calendar \\ nil, opts \\ [])
+
+  def schedule(%Task{type: :milestone} = task, unit, _changed, calendar, _opts) do
     start = snap_start(task.start_date || task.end_date, unit, calendar)
     {:ok, %{task | start_date: start, end_date: start, duration: 0}}
   end
 
-  def schedule(%Task{} = task, unit, changed, calendar) do
+  def schedule(%Task{} = task, unit, changed, calendar, opts) do
     %Task{start_date: start, end_date: finish, duration: duration} = task
     add = fn datetime, amount -> add_time(calendar, datetime, amount, unit) end
+    snap = Keyword.get(opts, :resize_snap, :extend)
 
     start =
-      if :end_date in changed and :start_date not in changed,
-        do: start,
-        else: snap_start(start, unit, calendar)
+      cond do
+        :end_date in changed and :start_date not in changed -> start
+        :end_date in changed -> snap_resized_start(start, unit, calendar, snap)
+        true -> snap_start(start, unit, calendar)
+      end
 
     {start, finish, duration} =
       cond do
@@ -402,7 +460,15 @@ defmodule GanttEx.Store do
         :start_date in changed and :end_date not in changed and not is_nil(duration) ->
           {start, add.(start, duration), duration}
 
+        :calendar_id in changed and :end_date not in changed and not is_nil(duration) ->
+          {start, add.(start, duration), duration}
+
         true ->
+          finish =
+            if :end_date in changed,
+              do: snap_end(finish, start, unit, calendar, snap),
+              else: finish
+
           {start, finish, diff_time(calendar, start, finish, unit)}
       end
 
@@ -416,6 +482,38 @@ defmodule GanttEx.Store do
   defp snap_start(nil, _unit, _calendar), do: nil
   defp snap_start(start, _unit, nil), do: start
   defp snap_start(start, unit, calendar), do: Calendar.next_working(calendar, start, unit)
+
+  # A start resized onto a non-working day: the start of the previous
+  # working day when the task grows
+  defp snap_resized_start(start, :day, %Calendar{} = calendar, :extend) when not is_nil(start) do
+    if Calendar.working_day?(calendar, NaiveDateTime.to_date(start)),
+      do: start,
+      else: Calendar.add(calendar, start, -1, :day)
+  end
+
+  defp snap_resized_start(start, unit, calendar, _snap), do: snap_start(start, unit, calendar)
+
+  # An end edited onto a non-working day (the last day of the task doesn't
+  # work): the end of the next working day, or of the previous one when the
+  # task shrinks, as long as it stays after the start
+  defp snap_end(finish, start, :day, %Calendar{} = calendar, snap)
+       when not is_nil(finish) and not is_nil(start) do
+    last_day = finish |> Dates.add(-1, :minute) |> NaiveDateTime.to_date()
+
+    cond do
+      Calendar.working_day?(calendar, last_day) ->
+        finish
+
+      snap == :extend ->
+        Calendar.add(calendar, finish, 1, :day)
+
+      true ->
+        shrunk = calendar |> Calendar.add(finish, -1, :day) |> Dates.add(1, :day)
+        if NaiveDateTime.compare(shrunk, start) == :gt, do: shrunk, else: finish
+    end
+  end
+
+  defp snap_end(finish, _start, _unit, _calendar, _snap), do: finish
 
   defp add_time(nil, datetime, amount, unit), do: Dates.add(datetime, amount, unit)
 
@@ -1059,7 +1157,9 @@ defmodule GanttEx.Store do
     with {:ok, old} <- fetch(store.tasks, id),
          {:ok, changed} <- Task.change(old, Map.delete(known, :parent) |> merge_meta(attrs)),
          {:ok, changed} <-
-           schedule(changed, store.duration_unit, Map.keys(known), calendar_for(store, changed)) do
+           schedule(changed, store.duration_unit, Map.keys(known), calendar_for(store, changed),
+             resize_snap: store.resize_snap
+           ) do
       store = put_in(store.tasks[id], changed)
 
       {store, move_changes} =
