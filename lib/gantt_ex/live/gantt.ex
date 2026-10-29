@@ -59,6 +59,10 @@ defmodule GanttEx.Live.Gantt do
       `:parent`, `:time` and `:progress`. Defaults to all of them.
     * `:inline_edit` - click a cell of the selected row to edit it. Defaults to `true`.
     * `:quick_info` - show a popup when a bar is clicked. Defaults to `true`.
+    * `:context_menu` - a right click on a row or a bar (or the menu key,
+      or Shift+F10) selects the task and opens a menu with actions, named:
+      `true` offers the actions of the `:actions` column, a list gives them
+      like that column (see `GanttEx.Live.Columns`). Defaults to `false`.
     * `:tooltips` - show tooltips when hovering bars. Defaults to `true`.
     * `:reorder` - drag rows in the grid to reorder or re-parent tasks. Defaults to `true`.
     * `:links_editable` - draw and edit dependencies. Defaults to `true`.
@@ -275,6 +279,7 @@ defmodule GanttEx.Live.Gantt do
     toolbar: true,
     tooltips: true,
     quick_info: true,
+    context_menu: false,
     lightbox: true,
     lightbox_sections: [:text, :type, :parent, :time, :progress],
     inline_edit: true,
@@ -384,6 +389,8 @@ defmodule GanttEx.Live.Gantt do
        analysis: nil,
        loading: MapSet.new(),
        popover: nil,
+       # the open context menu: the key of its task and where it opens
+       context_menu_at: nil,
        # filters: the normalized values, the last `:filter_values` received and
        # what is typed in the searchable filters
        filter_state: %{},
@@ -646,6 +653,7 @@ defmodule GanttEx.Live.Gantt do
 
     available = available_columns(a)
     columns = Enum.filter(available, & &1.visible)
+    context_actions = Columns.context_actions(a.context_menu, available, a.labels, a.readonly)
     a = Map.merge(a, %{ctx_resources: ctx_resources, columns: columns})
     selection = normalize_selection(a)
     show_critical = if is_nil(a.show_critical), do: a.critical_path, else: a.show_critical
@@ -691,6 +699,8 @@ defmodule GanttEx.Live.Gantt do
       link_paths: layout.links,
       columns: columns,
       column_choices: a.column_chooser && available,
+      context_actions: context_actions,
+      context_menu_task: a.context_menu_at && Store.task_by_key(a.store, a.context_menu_at.key),
       grid_width_value: grid_width,
       chart_width: layout.width,
       chart_height: chart_height,
@@ -1357,6 +1367,7 @@ defmodule GanttEx.Live.Gantt do
       data-gx-readonly={to_string(@readonly)}
       data-gx-drag-create={to_string(@drag_create and not @readonly)}
       data-gx-reorder={to_string(@reorderable)}
+      data-gx-context-menu={to_string(@context_actions != [])}
       data-gx-window={@window}
       phx-hook={@hook}
       phx-target={@myself}
@@ -1526,6 +1537,13 @@ defmodule GanttEx.Live.Gantt do
       </.lightbox>
       <.link_editor :if={@link_editor} ctx={@ctx} editor={@link_editor} />
       <.confirm :if={@confirm} ctx={@ctx} confirm={@confirm} />
+      <.context_menu
+        :if={@context_menu_at && @context_menu_task}
+        ctx={@ctx}
+        menu={@context_menu_at}
+        task={@context_menu_task}
+        actions={@context_actions}
+      />
     </div>
     """
   end
@@ -1726,6 +1744,55 @@ defmodule GanttEx.Live.Gantt do
     popover = Enum.find([:filters, :columns], &(Atom.to_string(&1) == popover))
     open = if socket.assigns.popover == popover, do: nil, else: popover
     {:noreply, socket |> assign(popover: open, quick_info_key: nil) |> apply_window()}
+  end
+
+  # -- events: context menu ----------------------------------------------------
+
+  # A right click (or the menu key) on a row or a bar: its task is selected,
+  # unless it already is, and the menu opens there, turned to stay inside
+  # the chart (`x` and `y` from the corner of the chart, of `width` and
+  # `height`).
+  def handle_event("gx:context_menu", %{"key" => key} = params, socket) do
+    a = socket.assigns
+
+    socket =
+      case a.context_actions != [] && Store.task_by_key(a.store, key) do
+        %Task{} ->
+          socket
+          |> then(
+            &if(MapSet.member?(a.selection, key), do: &1, else: select_task(&1, key, false))
+          )
+          |> assign(
+            context_menu_at: context_menu_at(key, params, length(a.context_actions)),
+            popover: nil,
+            quick_info_key: nil
+          )
+          |> prepare()
+
+        _ ->
+          socket
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("close_context_menu", _params, socket),
+    do: {:noreply, assign(socket, context_menu_at: nil)}
+
+  def handle_event("context_action", %{"action" => action, "key" => key}, socket) do
+    a = socket.assigns
+    task = Store.task_by_key(a.store, key)
+    socket = assign(socket, context_menu_at: nil)
+
+    case Enum.find(a.context_actions, &(to_string(&1.id) == action)) do
+      %{} = action when task != nil ->
+        if Columns.action_allowed?(action, task),
+          do: {:noreply, row_action(socket, action, key)},
+          else: {:noreply, socket}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("close_popover", _params, socket) do
@@ -2400,6 +2467,25 @@ defmodule GanttEx.Live.Gantt do
   end
 
   # -- helpers: row actions ----------------------------------------------------
+
+  # The size the context menu takes, to turn it before it leaves the chart
+  @menu_width 232
+  @menu_item_height 34
+
+  defp context_menu_at(key, params, count) do
+    [x, y, width, height] = Enum.map(~w(x y width height), &pixels(params[&1]))
+
+    %{
+      key: key,
+      x: x,
+      y: y,
+      left: width > 0 and x + @menu_width > width,
+      up: height > 0 and y + 12 + count * @menu_item_height > height
+    }
+  end
+
+  defp pixels(value) when is_number(value), do: round(max(value, 0))
+  defp pixels(_value), do: 0
 
   defp find_action(columns, id) do
     columns

@@ -290,6 +290,38 @@ defmodule GanttEx.Live.Columns do
   end
 
   @doc """
+  The actions of the context menu of the rows and the bars (the
+  `:context_menu` option of the chart): `true` takes the ones of the
+  `:actions` column (the defaults when there is none), a list gives them as
+  the `actions` of that column. The drag handle is left out; `false` and
+  `nil` give none.
+
+      iex> labels = GanttEx.I18n.labels("en")
+      iex> columns = GanttEx.Live.Columns.build([%{field: :actions, actions: [:drag, :rename, :detail]}], labels)
+      iex> GanttEx.Live.Columns.context_actions(true, columns, labels, false) |> Enum.map(& &1.id)
+      [:rename, :detail]
+      iex> GanttEx.Live.Columns.context_actions([:detail, :delete], columns, labels, true) |> Enum.map(& &1.id)
+      [:detail]
+      iex> GanttEx.Live.Columns.context_actions(false, columns, labels, false)
+      []
+  """
+  @spec context_actions(boolean() | list() | nil, [t()], map(), boolean()) :: [map()]
+  def context_actions(menu, _columns, _labels, _readonly) when menu in [nil, false, []], do: []
+
+  def context_actions(true, columns, labels, readonly) do
+    case Enum.find(columns, &(&1.field == :actions)) do
+      %{actions: actions} -> Enum.reject(actions, &(&1.id == :drag))
+      nil -> context_actions(@default_actions, columns, labels, readonly)
+    end
+  end
+
+  def context_actions(menu, _columns, labels, readonly) do
+    %{actions: menu}
+    |> actions(labels, readonly)
+    |> Enum.reject(&(&1.id == :drag))
+  end
+
+  @doc """
   Returns the width of an `:actions` column with `count` actions.
 
       iex> GanttEx.Live.Columns.actions_width(3)

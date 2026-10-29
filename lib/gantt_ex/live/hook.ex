@@ -88,6 +88,26 @@ defmodule GanttEx.Live.Hook do
               e.preventDefault()
               return
             }
+            // The arrow keys go through the items of the context menu
+            const menu = e.target.closest(".gx-context-menu")
+            if (menu && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+              e.preventDefault()
+              const items = Array.from(menu.querySelectorAll("[role=menuitem]"))
+              const index = items.indexOf(document.activeElement)
+              const next = e.key === "ArrowDown" ? index + 1 : index - 1
+              items[(next + items.length) % items.length]?.focus()
+              return
+            }
+            // The menu key (or Shift+F10) opens the context menu of the row in focus or selected
+            if ((e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) && this.flag("gxContextMenu")) {
+              if (e.target.closest("input, select, textarea, [contenteditable]")) return
+              const el = e.target.closest("[data-gx-row], [data-gx-bar]") || this.el.querySelector(".gx-row--selected[data-gx-row]")
+              if (!el) return
+              e.preventDefault()
+              const rect = el.getBoundingClientRect()
+              this.openContextMenu(el.dataset.gxBar || el.dataset.gxRow, rect.left + 24, rect.bottom)
+              return
+            }
             if (!(e.ctrlKey || e.metaKey) || e.altKey) return
             if (e.target.closest("input, select, textarea, [contenteditable]")) return
             const key = e.key.toLowerCase()
@@ -96,11 +116,21 @@ defmodule GanttEx.Live.Hook do
             e.preventDefault()
             this.push(event, {})
           }
+          // A right click on a row or a bar opens its context menu (when the chart has one)
+          this.onContextMenu = (e) => {
+            if (!this.flag("gxContextMenu")) return
+            if (e.target.closest("input, select, textarea, [contenteditable], .gx-context-menu")) return
+            const el = e.target.closest("[data-gx-bar], [data-gx-row]")
+            if (!el) return
+            e.preventDefault()
+            this.openContextMenu(el.dataset.gxBar || el.dataset.gxRow, e.clientX, e.clientY)
+          }
           this.onFullscreen = () => this.toggleFullscreen()
           this.onPrint = () => window.print()
 
           this.el.addEventListener("pointerdown", this.onPointerDown)
           this.el.addEventListener("dblclick", this.onDblClick)
+          this.el.addEventListener("contextmenu", this.onContextMenu)
           this.el.addEventListener("keydown", this.onKeyDown)
           this.el.addEventListener("click", this.onClickCapture, true)
           this.el.addEventListener("gantt_ex:fullscreen", this.onFullscreen)
@@ -162,6 +192,18 @@ defmodule GanttEx.Live.Hook do
         snapPx() { return parseFloat(this.el.dataset.gxSnap) || null },
         rowHeight() { return parseFloat(getComputedStyle(this.el).getPropertyValue("--gx-row-height")) || 36 },
         push(event, payload, onReply) { this.pushEventTo(this.el, event, payload, onReply || (() => {})) },
+
+        // Where the menu opens is given from the corner of the chart, with its size
+        openContextMenu(key, clientX, clientY) {
+          const rect = this.el.getBoundingClientRect()
+          this.push("gx:context_menu", {
+            key,
+            x: Math.round(clientX - rect.left),
+            y: Math.round(clientY - rect.top),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          })
+        },
 
         reportViewport(force) {
           const rendered = this.el.dataset.gxWindow

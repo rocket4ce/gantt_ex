@@ -451,6 +451,59 @@ defmodule GanttEx.Live.Styles do
         background: var(--gx-surface-2);
       }
 
+      /* the context menu of the rows and the bars */
+      .gx-context-menu {
+        position: absolute;
+        z-index: 70;
+        display: flex;
+        flex-direction: column;
+        width: 220px;
+        padding: 4px;
+        color: var(--gx-text);
+        background: var(--gx-bg);
+        border: 1px solid var(--gx-border);
+        border-radius: var(--gx-radius-lg);
+        box-shadow: var(--gx-shadow-lg);
+        animation: gx-pop 0.12s var(--gx-ease);
+      }
+
+      /* `translate`, not `transform`: the animation uses the transform */
+      .gx-context-menu--left {
+        translate: -100% 0;
+      }
+
+      .gx-context-menu--up {
+        translate: 0 -100%;
+      }
+
+      .gx-context-menu--left.gx-context-menu--up {
+        translate: -100% -100%;
+      }
+
+      .gx-context-menu-title {
+        margin: 0;
+        padding: 6px 10px 4px;
+        overflow: hidden;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--gx-muted);
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .gx-context-menu .gx-menu-item:focus-visible {
+        outline: 2px solid var(--gx-accent);
+        outline-offset: -2px;
+      }
+
+      .gx-menu-item--danger {
+        color: var(--gx-danger);
+      }
+
+      .gx-menu-item--danger:hover {
+        background: color-mix(in srgb, var(--gx-danger) 10%, transparent);
+      }
+
       .gx-btn--small {
         width: 26px;
         height: 26px;

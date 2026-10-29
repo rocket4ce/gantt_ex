@@ -16,6 +16,12 @@ Additions:
   (a dashed orange outline): a short delay would put them on the path. The
   legend explains them ("Near-critical (≤ 5 days)") and the status filter
   offers them. `GanttEx.CriticalPath.near_critical?/3` tells them apart
+- `:context_menu` option of the chart: a right click on a row or a bar (or
+  the menu key, or Shift+F10) selects the task and opens a menu with its
+  actions, with their names: `true` offers the actions of the `:actions`
+  column, a list gives them like that column. It turns to stay inside the
+  chart, the arrow keys go through it and Escape or a click outside close
+  it. `GanttEx.Live.Columns.context_actions/4` builds its actions
 
 Changes:
 

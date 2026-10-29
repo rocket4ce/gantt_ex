@@ -1318,6 +1318,84 @@ defmodule GanttEx.Live.Components do
     """
   end
 
+  @doc """
+  The context menu of a row or a bar (the `:context_menu` option of the
+  chart): its actions with their names, where it was asked for.
+  """
+  attr :ctx, :map, required: true
+  attr :menu, :map, required: true
+  attr :task, :map, required: true
+  attr :actions, :list, required: true
+
+  def context_menu(assigns) do
+    assigns =
+      assign(assigns,
+        items: Enum.filter(assigns.actions, &action_shown?(&1, assigns.task, assigns.ctx))
+      )
+
+    ~H"""
+    <div
+      :if={@items != []}
+      id={"#{@ctx.id}-context-menu"}
+      class={[
+        "gx-context-menu",
+        @menu.left && "gx-context-menu--left",
+        @menu.up && "gx-context-menu--up"
+      ]}
+      style={"left: #{@menu.x}px; top: #{@menu.y}px"}
+      role="menu"
+      aria-label={@ctx.labels.actions}
+      phx-click-away="close_context_menu"
+      phx-window-keydown="close_context_menu"
+      phx-key="Escape"
+      phx-target={@ctx.myself}
+      phx-mounted={Phoenix.LiveView.JS.focus_first()}
+    >
+      <p class="gx-context-menu-title">{@task.text}</p>
+      <.context_menu_item
+        :for={action <- @items}
+        ctx={@ctx}
+        menu={@menu}
+        task={@task}
+        action={action}
+      />
+    </div>
+    """
+  end
+
+  attr :ctx, :map, required: true
+  attr :menu, :map, required: true
+  attr :task, :map, required: true
+  attr :action, :map, required: true
+
+  defp context_menu_item(assigns) do
+    %{action: action, task: task, ctx: ctx} = assigns
+    block = action.builtin and action.id == :block
+
+    assigns =
+      assign(assigns,
+        icon: if(block and task.blocked, do: :lock_closed, else: action.icon),
+        label: if(block and task.blocked, do: ctx.labels.unblock_task, else: action.label),
+        danger: action.builtin and action.id == :delete
+      )
+
+    ~H"""
+    <button
+      id={"#{@ctx.id}-context-menu-#{dom_key(to_string(@action.id))}"}
+      type="button"
+      role="menuitem"
+      class={["gx-menu-item", @danger && "gx-menu-item--danger"]}
+      phx-click="context_action"
+      phx-value-action={@action.id}
+      phx-value-key={@menu.key}
+      phx-target={@ctx.myself}
+    >
+      <.icon name={@icon} />
+      <span>{@label}</span>
+    </button>
+    """
+  end
+
   defp action_dom_id(ctx, row, action),
     do: "#{ctx.id}-row-#{dom_key(row[:uid] || row.key)}-#{dom_key(to_string(action.id))}"
 
