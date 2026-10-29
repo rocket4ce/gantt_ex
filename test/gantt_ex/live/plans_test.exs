@@ -125,7 +125,7 @@ defmodule GanttEx.Live.PlansTest do
         assert has_element?(view, "#gantt-row-#{id} .gx-progress--#{status}", percent)
       end
 
-      assert has_element?(view, "#gantt-legend-group-progress", "Progress")
+      assert has_element?(view, "#gantt-legend-group-status", "Status")
       assert has_element?(view, "#gantt-legend-status-overdue", "Overdue")
       assert has_element?(view, "#gantt-legend-status-overdue .gx-swatch.gx-progress--overdue")
     end

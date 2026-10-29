@@ -1084,7 +1084,7 @@ defmodule GanttEx.Live.Gantt do
     # the colors of the progress column
     statuses =
       if Enum.any?(a.columns, &(&1.field == :progress and is_nil(&1.inner_block))) do
-        [%{key: "group-progress", label: labels.progress, kind: :group}] ++
+        [%{key: "group-status", label: labels.status, kind: :group}] ++
           for status <- [:completed, :in_progress, :not_started, :overdue] do
             %{
               key: "status-#{String.replace(to_string(status), "_", "-")}",
