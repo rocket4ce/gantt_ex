@@ -15,7 +15,8 @@ defmodule GanttEx.Live.RowActionsTest do
   test "renders compact buttons with tooltips on every task row", %{conn: conn} do
     {:ok, view, _html} = mount_actions(conn)
 
-    assert has_element?(view, "[role=columnheader] .gx-sr-only", "Actions")
+    assert has_element?(view, "[role=columnheader] .gx-truncate[title=Actions]", "Actions")
+    refute has_element?(view, ".gx-actions--always")
 
     for {action, label} <- [
           drag: "Drag to reorder",
@@ -35,6 +36,11 @@ defmodule GanttEx.Live.RowActionsTest do
 
     # the column is as wide as its actions
     assert render(view) =~ "--gx-col-4: #{GanttEx.Live.Columns.actions_width(8)}px"
+  end
+
+  test "the actions may always be shown, not only on hover", %{conn: conn} do
+    {:ok, view, _html} = mount_actions(conn, actions_reveal: :always)
+    assert has_element?(view, "[data-gx-row='2'] .gx-actions.gx-actions--always")
   end
 
   test "the actions do not select the row", %{conn: conn} do

@@ -1474,7 +1474,8 @@ defmodule GanttEx.Live.Styles do
         border-color: var(--gx-accent-soft);
       }
 
-      /* Row actions: shown on hover, focus and selection (always on touch screens) */
+      /* Row actions: shown on hover, focus and selection (always on touch screens,
+         and with `reveal: :always`) */
       .gx-actions {
         display: flex;
         align-items: center;
@@ -1507,6 +1508,14 @@ defmodule GanttEx.Live.Styles do
       .gx-row:focus-within .gx-action,
       .gx-row--selected .gx-action {
         opacity: 1;
+      }
+
+      .gx-actions--always .gx-action {
+        opacity: 1;
+      }
+
+      .gx-actions--always .gx-action--drag[aria-disabled="true"] {
+        opacity: 0.35;
       }
 
       @media (hover: none) {

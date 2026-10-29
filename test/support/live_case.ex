@@ -51,6 +51,7 @@ defmodule GanttEx.LiveCase do
     {tasks, opts} = Keyword.pop(opts, :tasks, sample_tasks())
     {links, opts} = Keyword.pop(opts, :links, sample_links())
     {row_actions, opts} = Keyword.pop(opts, :row_actions)
+    {actions_reveal, opts} = Keyword.pop(opts, :actions_reveal, :hover)
     {extra_columns, opts} = Keyword.pop(opts, :extra_columns, false)
 
     live_isolated(conn, GanttEx.Test.GanttLive,
@@ -59,6 +60,7 @@ defmodule GanttEx.LiveCase do
         "links" => links,
         "opts" => Map.new(opts),
         "row_actions" => row_actions,
+        "actions_reveal" => actions_reveal,
         "extra_columns" => extra_columns,
         "test_pid" => self()
       }

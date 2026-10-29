@@ -969,7 +969,7 @@ defmodule GanttEx.Live.Components do
       >
         <%= cond do %>
           <% col.field == :actions -> %>
-            <span class="gx-sr-only">{col.label}</span>
+            <span class="gx-truncate" title={col.label}>{col.label}</span>
           <% col.field == :add -> %>
             <button
               :if={not @ctx.readonly}
@@ -1142,7 +1142,10 @@ defmodule GanttEx.Live.Components do
 
   defp cell_content(%{column: %{field: :actions}} = assigns) do
     ~H"""
-    <div :if={not @row[:group]} class="gx-actions">
+    <div
+      :if={not @row[:group]}
+      class={["gx-actions", @column[:reveal] == :always && "gx-actions--always"]}
+    >
       <.row_action
         :for={action <- @column.actions}
         :if={action_shown?(action, @row.task, @ctx)}

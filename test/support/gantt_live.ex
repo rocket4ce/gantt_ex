@@ -11,6 +11,7 @@ defmodule GanttEx.Test.GanttLive do
        links: Map.get(session, "links", []),
        opts: Map.get(session, "opts", %{}),
        row_actions: Map.get(session, "row_actions"),
+       actions_reveal: Map.get(session, "actions_reveal", :hover),
        extra_columns: Map.get(session, "extra_columns", false),
        test_pid: Map.fetch!(session, "test_pid")
      )}
@@ -37,7 +38,7 @@ defmodule GanttEx.Test.GanttLive do
       <:column :let={task} :if={@extra_columns} field={:cost} label="Cost" hidden align="right">
         <span class="cost">{task.meta[:cost]}</span>
       </:column>
-      <:column :if={@row_actions} field={:actions} actions={@row_actions} />
+      <:column :if={@row_actions} field={:actions} actions={@row_actions} reveal={@actions_reveal} />
       <:column field={:add} />
     </.live_component>
     """

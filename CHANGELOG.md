@@ -22,6 +22,12 @@ Additions:
 - `:calendar_days` icon
 - Row actions take a `:when` function to be offered to some tasks only,
   also for the built-in ones (`%{id: :restriction, when: &(&1.progress < 1)}`)
+- `reveal: :always` on the `:actions` column shows the buttons on every row,
+  not only on hover
+
+Changes:
+
+- The header of the `:actions` column shows its label
 
 ## 0.3.0 (2026-10-28)
 

@@ -44,7 +44,9 @@ defmodule GanttEx.Live.Columns do
   for the other tasks, also when it comes from the client.
 
   Read-only charts drop the actions that edit (all of them but `:detail`
-  and the custom ones). The column is as wide as its actions.
+  and the custom ones). The column is as wide as its actions, and its
+  buttons show when the row is hovered, focused or selected, or always with
+  `reveal: :always` (`<:column field={:actions} actions={...} reveal={:always} />`).
 
       iex> labels = GanttEx.I18n.labels("en")
       iex> [column] = GanttEx.Live.Columns.build([%{field: :actions, actions: [:drag, :detail, %{id: :pin, icon: :bolt, label: "Pin"}]}], labels, readonly: true)
