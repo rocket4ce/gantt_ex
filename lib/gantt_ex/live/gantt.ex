@@ -358,6 +358,8 @@ defmodule GanttEx.Live.Gantt do
        notice: nil,
        zoom_name: nil,
        zoom_attr: nil,
+       # `{level before, :day level}` while a lookahead holds the zoom it changed
+       lookahead_zoom: nil,
        # columns: the user's layout and the last `:column_layout` received
        column_state: Columns.normalize_layout(nil),
        column_attr: :unset,
@@ -1584,7 +1586,7 @@ defmodule GanttEx.Live.Gantt do
         do: Map.delete(previous, :lookahead),
         else: Map.put(previous, :lookahead, weeks)
 
-    {:noreply, socket |> lookahead_zoom(previous, state) |> put_filters(state)}
+    {:noreply, put_filters(socket, state)}
   end
 
   # The width of the viewport only matters to a lookahead (see fit_lookahead/4)
@@ -1676,6 +1678,13 @@ defmodule GanttEx.Live.Gantt do
         |> put_filters(Map.delete(a.filter_state, id))
         |> then(&{:noreply, &1})
     end
+  end
+
+  # The panel clears its own filters: the search and the lookahead have their
+  # own controls (and stay). The bar and the empty list clear them all.
+  def handle_event("filters_clear", %{"scope" => "panel"}, socket) do
+    kept = Map.take(socket.assigns.filter_state, [:search, :lookahead])
+    {:noreply, socket |> assign(filter_queries: %{}) |> put_filters(kept)}
   end
 
   def handle_event("filters_clear", _params, socket) do
@@ -2434,6 +2443,7 @@ defmodule GanttEx.Live.Gantt do
       notify(socket, %Event{gantt_id: a.id, type: :filters_changed, filters: values})
 
       socket
+      |> lookahead_zoom(a.filter_state, values)
       |> assign(
         filter_state: values,
         quick_info_key: nil,
@@ -2449,8 +2459,18 @@ defmodule GanttEx.Live.Gantt do
     do: a |> filter_definitions(true) |> Enum.find(&(to_string(&1.id) == id))
 
   # A lookahead is read day by day: coarser scales switch to the :day level
-  # when it starts (chosen in the menu or restored from the filter values).
+  # when it starts (chosen in the menu or restored from the filter values),
+  # and go back when it ends, however it is removed (the menu, its chip,
+  # clearing the filters), unless the zoom was changed meanwhile.
   defp lookahead_zoom(socket, previous, state) do
+    case {Map.has_key?(previous, :lookahead), Map.has_key?(state, :lookahead)} do
+      {false, true} -> start_lookahead_zoom(socket)
+      {true, false} -> end_lookahead_zoom(socket)
+      _ -> socket
+    end
+  end
+
+  defp start_lookahead_zoom(socket) do
     a = socket.assigns
     minor = List.last(Zoom.find(a.zoom_levels, a.zoom_name).scales)
 
@@ -2458,10 +2478,20 @@ defmodule GanttEx.Live.Gantt do
       Enum.find(a.zoom_levels, &(&1.name == :day)) ||
         Enum.find(a.zoom_levels, &(List.last(&1.scales).unit == :day))
 
-    if Map.has_key?(state, :lookahead) and not Map.has_key?(previous, :lookahead) and
-         minor.unit not in [:minute, :hour, :day] and day_level != nil,
-       do: assign(socket, zoom_name: day_level.name),
-       else: socket
+    if minor.unit not in [:minute, :hour, :day] and day_level != nil,
+      do:
+        assign(socket, zoom_name: day_level.name, lookahead_zoom: {a.zoom_name, day_level.name}),
+      else: socket
+  end
+
+  defp end_lookahead_zoom(socket) do
+    case socket.assigns.lookahead_zoom do
+      {before, day} when day == socket.assigns.zoom_name ->
+        assign(socket, zoom_name: before, lookahead_zoom: nil)
+
+      _ ->
+        assign(socket, lookahead_zoom: nil)
+    end
   end
 
   defp remove_option(values, key),

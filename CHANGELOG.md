@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Fixes:
+
+- Ending a lookahead (the menu, its chip, clearing the filters) goes back
+  to the zoom level it switched from, unless the zoom was changed meanwhile
+- "Clear filters" in the filter panel clears the filters of the panel only:
+  the lookahead and the search, which have their own controls, stay. The
+  filter bar and the empty list still clear them all
+
 ## 0.4.1 (unreleased)
 
 Additions:

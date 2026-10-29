@@ -112,6 +112,56 @@ defmodule GanttEx.Live.LookaheadTest do
     assert html =~ "--gx-column-width: 48px"
   end
 
+  test "ending it goes back to the zoom it changed, however it is removed", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn, filters: [:type, :lookahead], zoom: :week)
+
+    # the menu
+    pick(view, 1)
+    assert has_element?(view, "#gantt-zoom-day[aria-pressed=true]")
+    view |> element("#gantt-lookahead-off") |> render_click()
+    assert has_element?(view, "#gantt-zoom-week[aria-pressed=true]")
+
+    # its chip in the filter bar
+    pick(view, 2)
+    view |> element("#gantt-filter-lookahead-active button") |> render_click()
+    assert has_element?(view, "#gantt-zoom-week[aria-pressed=true]")
+
+    # clearing every filter from the bar
+    pick(view, 1)
+    view |> element("#gantt-clear-filters") |> render_click()
+    assert has_element?(view, "#gantt-zoom-week[aria-pressed=true]")
+  end
+
+  test "a zoom chosen during the lookahead stays after it", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn, filters: [:lookahead], zoom: :week)
+
+    pick(view, 1)
+    view |> element("#gantt-zoom-month") |> render_click()
+    view |> element("#gantt-lookahead-off") |> render_click()
+
+    assert has_element?(view, "#gantt-zoom-month[aria-pressed=true]")
+  end
+
+  test "clearing the panel keeps the lookahead and the search", %{conn: conn} do
+    {:ok, view, _html} =
+      mount_gantt(conn,
+        filters: [:search, :type, :lookahead],
+        filter_values: %{lookahead: 2, type: [:task], search: "a"}
+      )
+
+    view |> element("#gantt-filters-toggle") |> render_click()
+    view |> element("#gantt-filters-clear") |> render_click()
+
+    assert_gantt_event(%Event{type: :filters_changed, filters: filters})
+    assert filters == %{lookahead: 2, search: "a"}
+    assert has_element?(view, "#gantt-lookahead-2[aria-checked=true]")
+    assert has_element?(view, "#gantt-zoom-day[aria-pressed=true]")
+
+    # the bar still clears them all
+    view |> element("#gantt-clear-filters") |> render_click()
+    assert_gantt_event(%Event{type: :filters_changed, filters: %{}})
+  end
+
   test "is not offered by default", %{conn: conn} do
     {:ok, view, _html} = mount_gantt(conn)
     refute has_element?(view, "#gantt-lookahead")

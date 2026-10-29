@@ -441,6 +441,7 @@ defmodule GanttEx.Live.Components do
             type="button"
             class="gx-text-btn"
             phx-click="filters_clear"
+            phx-value-scope="panel"
             phx-target={@ctx.myself}
           >
             {@ctx.labels.clear_filters}
