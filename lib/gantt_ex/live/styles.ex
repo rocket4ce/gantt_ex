@@ -63,6 +63,17 @@ defmodule GanttEx.Live.Styles do
         --gx-radius: 6px;
         --gx-radius-lg: 12px;
         --gx-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+        /* weekly plan */
+        --gx-week: #14b8a6;
+        --gx-week-soft: rgba(20, 184, 166, 0.07);
+        --gx-committed: #bbf7d0;
+        --gx-committed-progress: #4ade80;
+        --gx-committed-border: #22c55e;
+        --gx-committed-text: #14532d;
+        --gx-not-committed: #c3d2dd;
+        --gx-not-committed-progress: #8ca6b9;
+        --gx-not-committed-border: #7b97ab;
+        --gx-not-committed-text: #1e293b;
       }
 
       .gx-root[data-gx-theme="dark"],
@@ -96,6 +107,16 @@ defmodule GanttEx.Live.Styles do
         --gx-success: #34d399;
         --gx-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
         --gx-shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.08);
+        --gx-week: #2dd4bf;
+        --gx-week-soft: rgba(45, 212, 191, 0.08);
+        --gx-committed: #14532d;
+        --gx-committed-progress: #16a34a;
+        --gx-committed-border: #22c55e;
+        --gx-committed-text: #dcfce7;
+        --gx-not-committed: #334155;
+        --gx-not-committed-progress: #475569;
+        --gx-not-committed-border: #64748b;
+        --gx-not-committed-text: #e2e8f0;
       }
 
       @media (prefers-color-scheme: dark) {
@@ -127,6 +148,16 @@ defmodule GanttEx.Live.Styles do
           --gx-success: #34d399;
           --gx-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
           --gx-shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.08);
+          --gx-week: #2dd4bf;
+          --gx-week-soft: rgba(45, 212, 191, 0.08);
+          --gx-committed: #14532d;
+          --gx-committed-progress: #16a34a;
+          --gx-committed-border: #22c55e;
+          --gx-committed-text: #dcfce7;
+          --gx-not-committed: #334155;
+          --gx-not-committed-progress: #475569;
+          --gx-not-committed-border: #64748b;
+          --gx-not-committed-text: #e2e8f0;
         }
       }
 
@@ -2685,6 +2716,355 @@ defmodule GanttEx.Live.Styles do
         color: var(--gx-muted);
       }
 
+      /* ------------------------------------------------------- weekly plan */
+      .gx-scale-band {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        z-index: 1;
+        background: var(--gx-week-soft);
+        border: 1.5px solid var(--gx-week);
+        border-bottom: 0;
+        border-radius: 6px 6px 0 0;
+        pointer-events: none;
+      }
+
+      .gx-week-band {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        background: var(--gx-week-soft);
+        border-inline: 1.5px solid var(--gx-week);
+        pointer-events: none;
+      }
+
+      .gx-week-band-label {
+        position: sticky;
+        top: calc(var(--gx-header-height, 64px) + 6px);
+        z-index: 4;
+        display: block;
+        width: max-content;
+        max-width: calc(100% - 8px);
+        margin: 0 4px 0 auto;
+        padding: 1px 7px;
+        overflow: hidden;
+        font-size: 11px;
+        font-weight: 600;
+        color: #ffffff;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        background: var(--gx-week);
+        border-radius: 999px;
+        box-shadow: var(--gx-shadow);
+      }
+
+      .gx-root--week-plan .gx-bar--committed,
+      .gx-root--week-plan .gx-bar--not-committed {
+        --gx-bar-text: var(--gx-plan-text);
+      }
+
+      .gx-root--week-plan .gx-bar--committed {
+        --gx-plan-bg: var(--gx-committed);
+        --gx-plan-progress: var(--gx-committed-progress);
+        --gx-plan-border: var(--gx-committed-border);
+        --gx-plan-text: var(--gx-committed-text);
+      }
+
+      .gx-root--week-plan .gx-bar--not-committed {
+        --gx-plan-bg: var(--gx-not-committed);
+        --gx-plan-progress: var(--gx-not-committed-progress);
+        --gx-plan-border: var(--gx-not-committed-border);
+        --gx-plan-text: var(--gx-not-committed-text);
+      }
+
+      .gx-root--week-plan :is(.gx-bar--committed, .gx-bar--not-committed):not(.gx-bar--milestone)
+        .gx-bar-body {
+        background: var(--gx-plan-bg);
+        box-shadow: inset 0 0 0 1px var(--gx-plan-border), var(--gx-shadow);
+      }
+
+      .gx-root--week-plan :is(.gx-bar--committed, .gx-bar--not-committed) .gx-bar-progress {
+        background: var(--gx-plan-progress);
+      }
+
+      .gx-root--week-plan :is(.gx-bar--committed, .gx-bar--not-committed) .gx-bar-text {
+        text-shadow: none;
+      }
+
+      /* the critical path stays visible as a red underline */
+      .gx-root--week-plan
+        :is(.gx-bar--committed, .gx-bar--not-committed).gx-bar--critical:not(.gx-bar--milestone)
+        .gx-bar-body {
+        box-shadow: inset 0 -3px 0 var(--gx-critical, #e11d48), inset 0 0 0 1px var(--gx-plan-border),
+          var(--gx-shadow);
+      }
+
+      .gx-root--week-plan .gx-bar--selected:is(.gx-bar--committed, .gx-bar--not-committed)
+        .gx-bar-body {
+        box-shadow: 0 0 0 2px var(--gx-bg), 0 0 0 4px var(--gx-accent), 0 8px 18px -8px rgba(15, 23, 42, 0.5);
+      }
+
+      .gx-root--week-plan .gx-bar--milestone.gx-bar--committed .gx-bar-body::before {
+        background: var(--gx-committed-progress);
+        border-color: var(--gx-committed-border);
+      }
+
+      /* the lookahead shows its weeks only: bars that go on are cut at the edges */
+      .gx-root--windowed .gx-chart {
+        overflow-x: clip;
+      }
+
+      .gx-lookahead .gx-menu-list {
+        right: auto;
+        left: 0;
+      }
+
+      .gx-menu-item--checked {
+        font-weight: 600;
+        color: var(--gx-accent-strong);
+      }
+
+      .gx-menu-check {
+        color: var(--gx-accent);
+      }
+
+      .gx-invisible {
+        visibility: hidden;
+      }
+
+      /* ------------------------------------------------------ summary bars */
+      .gx-summary-cap {
+        display: none;
+      }
+
+      .gx-root--bracket .gx-bar--summary .gx-bar-body {
+        inset: 16% 0 auto 0;
+        height: 40%;
+        overflow: visible;
+        border-radius: 2px 2px 0 0;
+      }
+
+      .gx-root--bracket .gx-bar--summary .gx-bar-progress {
+        border-radius: inherit;
+      }
+
+      .gx-root--bracket .gx-bar--summary .gx-summary-cap {
+        position: absolute;
+        top: 100%;
+        display: block;
+        width: 0;
+        height: 0;
+        border-top: calc(var(--gx-bar-height) * 0.32) solid var(--gx-bar-bg, var(--gx-project));
+      }
+
+      .gx-root--bracket .gx-bar--summary .gx-summary-cap--start {
+        left: 0;
+        border-right: calc(var(--gx-bar-height) * 0.3) solid transparent;
+      }
+
+      .gx-root--bracket .gx-bar--summary .gx-summary-cap--end {
+        right: 0;
+        border-left: calc(var(--gx-bar-height) * 0.3) solid transparent;
+      }
+
+      .gx-root--bracket .gx-bar--summary.gx-bar--critical .gx-summary-cap {
+        border-top-color: var(--gx-bar-bg, var(--gx-critical, #e11d48));
+      }
+
+      .gx-root--bracket .gx-bar--summary .gx-bar-text {
+        position: absolute;
+        left: 100%;
+        padding-left: calc(var(--gx-bar-height) * 0.3 + 6px);
+        overflow: visible;
+        color: var(--gx-text);
+        text-shadow: none;
+      }
+
+      .gx-root--bracket .gx-bar--summary:hover .gx-bar-body {
+        box-shadow: var(--gx-shadow);
+      }
+
+      /* -------------------------------------------------------------- legend */
+      .gx-legend {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 16px;
+        padding: 9px 14px;
+        font-size: 12px;
+        color: var(--gx-muted);
+        background: var(--gx-surface);
+        border-top: 1px solid var(--gx-border);
+      }
+
+      .gx-legend-title {
+        font-size: 11px;
+        font-weight: 650;
+        color: var(--gx-text);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .gx-legend-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .gx-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+
+      .gx-legend-group {
+        padding-left: 14px;
+        font-weight: 600;
+        color: var(--gx-text);
+        border-left: 1px solid var(--gx-border);
+      }
+
+      .gx-swatch {
+        position: relative;
+        flex: none;
+        display: inline-block;
+        width: 22px;
+        height: 10px;
+        background: var(--gx-swatch, var(--gx-task));
+        border-radius: 3px;
+      }
+
+      .gx-swatch--task {
+        background: var(--gx-task);
+      }
+
+      .gx-swatch--progress {
+        background: linear-gradient(to right, var(--gx-task-progress) 60%, var(--gx-task) 0);
+      }
+
+      .gx-swatch--project {
+        background: var(--gx-project);
+      }
+
+      .gx-swatch--bracket {
+        height: 5px;
+        margin-bottom: 4px;
+        background: var(--gx-project);
+        border-radius: 1px 1px 0 0;
+      }
+
+      .gx-swatch--bracket::before,
+      .gx-swatch--bracket::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        border-top: 5px solid var(--gx-project);
+      }
+
+      .gx-swatch--bracket::before {
+        left: 0;
+        border-right: 5px solid transparent;
+      }
+
+      .gx-swatch--bracket::after {
+        right: 0;
+        border-left: 5px solid transparent;
+      }
+
+      .gx-swatch--milestone {
+        width: 9px;
+        height: 9px;
+        margin: 0 6px;
+        background: var(--gx-milestone);
+        border: 1px solid var(--gx-milestone-border);
+        border-radius: 2px;
+        transform: rotate(45deg);
+      }
+
+      .gx-swatch--critical {
+        background: var(--gx-critical, #e11d48);
+      }
+
+      .gx-swatch--baseline {
+        height: 5px;
+        background: var(--gx-baseline, #94a3b8);
+        opacity: 0.85;
+      }
+
+      .gx-swatch--deadline {
+        width: 2px;
+        height: 14px;
+        margin: 0 10px 0 6px;
+        background: var(--gx-deadline, #f59e0b);
+        border-radius: 0;
+      }
+
+      .gx-swatch--deadline::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 9px;
+        height: 7px;
+        background: var(--gx-deadline, #f59e0b);
+        clip-path: polygon(0 0, 100% 50%, 0 100%);
+      }
+
+      .gx-swatch--overdue {
+        background: var(--gx-task);
+        box-shadow: inset 0 0 0 2px var(--gx-danger);
+      }
+
+      .gx-swatch--today {
+        width: 2px;
+        height: 14px;
+        margin: 0 10px;
+        background: var(--gx-accent);
+        border-radius: 0;
+      }
+
+      .gx-swatch--committed {
+        background: linear-gradient(to right, var(--gx-committed-progress) 45%, var(--gx-committed) 0);
+        box-shadow: inset 0 0 0 1px var(--gx-committed-border);
+      }
+
+      .gx-swatch--not-committed {
+        background: var(--gx-not-committed);
+        box-shadow: inset 0 0 0 1px var(--gx-not-committed-border);
+      }
+
+      .gx-swatch--week {
+        width: 18px;
+        height: 14px;
+        background: var(--gx-week-soft);
+        border-inline: 1.5px solid var(--gx-week);
+        border-radius: 0;
+      }
+
+      .gx-swatch--dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+      }
+
+      .gx-swatch--line {
+        height: 3px;
+      }
+
+      .gx-legend-icon {
+        display: inline-flex;
+        color: var(--gx-muted);
+      }
+
+      .gx-legend-icon .gx-icon {
+        width: 14px;
+        height: 14px;
+      }
+
       /* ------------------------------------------------------------- motion */
       @keyframes gx-fade {
         from { opacity: 0; }
@@ -2757,6 +3137,10 @@ defmodule GanttEx.Live.Styles do
         .gx-bar-body,
         .gx-bar-progress,
         .gx-highlight,
+        .gx-week-band,
+        .gx-scale-band,
+        .gx-summary-cap,
+        .gx-swatch,
         .gx-scale-cell--weekend {
           print-color-adjust: exact;
           -webkit-print-color-adjust: exact;

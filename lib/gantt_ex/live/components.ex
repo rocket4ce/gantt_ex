@@ -58,7 +58,9 @@ defmodule GanttEx.Live.Components do
     assigns =
       assign(assigns,
         can_zoom_in: GanttEx.Zoom.can_zoom?(assigns.levels, assigns.zoom, :in),
-        can_zoom_out: GanttEx.Zoom.can_zoom?(assigns.levels, assigns.zoom, :out)
+        can_zoom_out: GanttEx.Zoom.can_zoom?(assigns.levels, assigns.zoom, :out),
+        lookahead:
+          assigns.filters && Enum.find(assigns.filters.definitions, &(&1.kind == :lookahead))
       )
 
     ~H"""
@@ -190,6 +192,14 @@ defmodule GanttEx.Live.Components do
         <span>{@ctx.labels.today}</span>
       </button>
 
+      <.lookahead_menu
+        :if={@lookahead}
+        ctx={@ctx}
+        definition={@lookahead}
+        value={@filters.values[@lookahead.id]}
+        range={@filters[:lookahead]}
+      />
+
       <div class="gx-toolbar-spacer"></div>
 
       <.search_box
@@ -198,7 +208,7 @@ defmodule GanttEx.Live.Components do
         value={@filters.values[:search]}
       />
       <.filter_menu
-        :if={@filters && Enum.any?(@filters.definitions, &(&1.kind != :search))}
+        :if={@filters && Enum.any?(@filters.definitions, &(&1.kind not in [:search, :lookahead]))}
         ctx={@ctx}
         filters={@filters}
         open={@popover == :filters}
@@ -303,6 +313,72 @@ defmodule GanttEx.Live.Components do
   end
 
   @doc """
+  Renders the lookahead menu of the toolbar: the number of weeks to show
+  from the current week, or the whole schedule (see `GanttEx.Filter`).
+  """
+  attr :ctx, :map, required: true
+  attr :definition, :map, required: true
+  attr :value, :any, default: nil, doc: "the selected number of weeks"
+  attr :range, :map, default: nil, doc: "`%{from, to}`, the days shown"
+
+  def lookahead_menu(assigns) do
+    assigns =
+      assign(assigns,
+        selected: Enum.find(assigns.definition.options, &(&1.value == assigns.value)),
+        menu_id: "#{assigns.ctx.id}-lookahead"
+      )
+
+    ~H"""
+    <details id={@menu_id} class="gx-menu gx-lookahead">
+      <summary
+        id={"#{@menu_id}-toggle"}
+        class={["gx-btn", @selected && "gx-btn--active"]}
+        title={@range && range_text(@range, @ctx)}
+      >
+        <.icon name={:calendar_days} />
+        <span>{@definition.label}</span>
+        <span :if={@selected} class="gx-badge">{@selected.label}</span>
+      </summary>
+      <div class="gx-menu-list" role="menu" aria-label={@definition.label}>
+        <button
+          id={"#{@menu_id}-off"}
+          type="button"
+          role="menuitemradio"
+          aria-checked={to_string(is_nil(@selected))}
+          class={["gx-menu-item", is_nil(@selected) && "gx-menu-item--checked"]}
+          phx-click={lookahead_pick(@ctx, @menu_id, "")}
+        >
+          <.icon name={:check} class={["gx-menu-check", @selected && "gx-invisible"]} />
+          {@ctx.labels.lookahead_off}
+        </button>
+        <button
+          :for={option <- @definition.options}
+          id={"#{@menu_id}-#{option.key}"}
+          type="button"
+          role="menuitemradio"
+          aria-checked={to_string(@selected == option)}
+          class={["gx-menu-item", @selected == option && "gx-menu-item--checked"]}
+          phx-click={lookahead_pick(@ctx, @menu_id, option.key)}
+        >
+          <.icon name={:check} class={["gx-menu-check", @selected != option && "gx-invisible"]} />
+          {option.label}
+        </button>
+      </div>
+    </details>
+    """
+  end
+
+  defp lookahead_pick(ctx, menu_id, weeks) do
+    JS.push("lookahead", value: %{weeks: weeks}, target: ctx.myself)
+    |> JS.remove_attribute("open", to: "#" <> menu_id)
+  end
+
+  defp range_text(%{from: from, to: to}, ctx) do
+    format = &ctx.format.(NaiveDateTime.new!(&1, ~T[00:00:00]), :date)
+    "#{format.(from)} – #{format.(to)}"
+  end
+
+  @doc """
   Renders the "Filters" toolbar button and its panel. `filters` holds the
   `:definitions` and the normalized `:values` (see `GanttEx.Filter`), and the
   `:queries` typed in the searchable filters.
@@ -314,8 +390,8 @@ defmodule GanttEx.Live.Components do
   def filter_menu(assigns) do
     assigns =
       assign(assigns,
-        active: map_size(Map.delete(assigns.filters.values, :search)),
-        panel: Enum.reject(assigns.filters.definitions, &(&1.kind == :search))
+        active: map_size(Map.drop(assigns.filters.values, [:search, :lookahead])),
+        panel: Enum.reject(assigns.filters.definitions, &(&1.kind in [:search, :lookahead]))
       )
 
     ~H"""
@@ -784,7 +860,13 @@ defmodule GanttEx.Live.Components do
       for definition <- assigns.filters.definitions,
           value = Map.get(assigns.filters.values, definition.id),
           value != nil,
-          do: {definition, filter_summary(definition, value, assigns.ctx)}
+          do:
+            {definition,
+             filter_summary(
+               definition,
+               value,
+               Map.put(assigns.ctx, :lookahead, assigns.filters[:lookahead])
+             )}
 
     assigns = assign(assigns, active: active)
 
@@ -837,6 +919,15 @@ defmodule GanttEx.Live.Components do
       {from, nil} -> "≥ #{from}"
       {nil, to} -> "≤ #{to}"
       {from, to} -> "#{from} – #{to}"
+    end
+  end
+
+  defp filter_summary(%{kind: :lookahead} = definition, weeks, ctx) do
+    label = Enum.find_value(definition.options, &(&1.value == weeks && &1.label))
+
+    case Map.get(ctx, :lookahead) do
+      nil -> label
+      range -> "#{label} · #{range_text(range, ctx)}"
     end
   end
 
@@ -1360,10 +1451,17 @@ defmodule GanttEx.Live.Components do
   @doc "Renders the time scale header."
   attr :rows, :list, required: true
   attr :width, :integer, required: true
+  attr :band, :map, default: nil, doc: "`%{x, width}`, the week of the weekly plan"
 
   def scale(assigns) do
     ~H"""
     <div class="gx-scale" style={"width: #{@width}px"} aria-hidden="true">
+      <div
+        :if={@band}
+        class="gx-scale-band"
+        style={"left: #{px(@band.x)}; width: #{px(@band.width)}"}
+      >
+      </div>
       <div :for={cells <- @rows} class="gx-scale-row">
         <div
           :for={cell <- cells}
@@ -1405,6 +1503,9 @@ defmodule GanttEx.Live.Components do
         @bar[:deadline] && @bar.deadline.overdue && "gx-bar--overdue",
         @bar.task.blocked && "gx-bar--blocked",
         @bar.task.restrictions > 0 && "gx-bar--restricted",
+        @bar[:summary] && "gx-bar--summary",
+        @bar[:commitment] == :committed && "gx-bar--committed",
+        @bar[:commitment] == :not_committed && "gx-bar--not-committed",
         @bar.class
       ]}
       style={bar_style(@bar)}
@@ -1420,6 +1521,8 @@ defmodule GanttEx.Live.Components do
     >
       <div class="gx-bar-body">
         <div :if={@bar.kind != :milestone} class="gx-bar-progress"></div>
+        <span :if={@bar[:summary]} class="gx-summary-cap gx-summary-cap--start"></span>
+        <span :if={@bar[:summary]} class="gx-summary-cap gx-summary-cap--end"></span>
         <span class="gx-bar-text">
           <%= if @task_text != [] do %>
             {render_slot(@task_text, @bar.task)}
@@ -1671,6 +1774,82 @@ defmodule GanttEx.Live.Components do
     </div>
     """
   end
+
+  @doc """
+  Renders the week of the weekly plan on the chart: `plan` has the `:band`
+  (`%{x, width}`) and the `:label` of the week.
+  """
+  attr :ctx, :map, required: true
+  attr :plan, :map, required: true
+
+  def week_band(assigns) do
+    ~H"""
+    <div
+      id={"#{@ctx.id}-week-plan"}
+      class="gx-week-band"
+      style={"left: #{px(@plan.band.x)}; width: #{px(@plan.band.width)}"}
+      title={@plan.label || @ctx.labels.week_plan}
+    >
+      <span class="gx-week-band-label">{@plan.label || @ctx.labels.week_plan}</span>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders the legend of the chart: `entries` are maps with a `:key`, a
+  `:label` and a `:kind` (what the swatch draws), and an optional `:color`.
+  """
+  attr :ctx, :map, required: true
+  attr :entries, :list, required: true
+
+  def legend(assigns) do
+    ~H"""
+    <div id={"#{@ctx.id}-legend"} class="gx-legend" aria-label={@ctx.labels.legend}>
+      <span class="gx-legend-title">{@ctx.labels.legend}</span>
+      <ul class="gx-legend-list">
+        <li
+          :for={entry <- @entries}
+          id={"#{@ctx.id}-legend-#{entry.key}"}
+          class={["gx-legend-item", entry.kind == :group && "gx-legend-group"]}
+        >
+          <.legend_swatch :if={entry.kind != :group} kind={entry.kind} color={entry[:color]} />
+          <span>{entry.label}</span>
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  attr :kind, :any, required: true
+  attr :color, :string, default: nil
+
+  defp legend_swatch(%{kind: {:icon, _icon}} = assigns) do
+    ~H"""
+    <span class="gx-legend-icon" style={@color && "color: #{@color}"} aria-hidden="true">
+      <.icon name={elem(@kind, 1)} />
+    </span>
+    """
+  end
+
+  defp legend_swatch(assigns) do
+    assigns = assign(assigns, :class, swatch_class(assigns.kind))
+
+    ~H"""
+    <span
+      class={["gx-swatch", @class]}
+      style={@color && "--gx-swatch: #{@color}"}
+      aria-hidden="true"
+    ></span>
+    """
+  end
+
+  defp swatch_class({:summary, :bracket}), do: "gx-swatch--bracket"
+  defp swatch_class({:summary, _style}), do: "gx-swatch--project"
+  defp swatch_class({:shape, shape}) when shape in [:dot, :line], do: "gx-swatch--#{shape}"
+  defp swatch_class({:shape, _shape}), do: "gx-swatch--custom"
+
+  defp swatch_class(kind) when is_atom(kind),
+    do: "gx-swatch--" <> String.replace(to_string(kind), "_", "-")
 
   @doc "Renders the timeline markers (see `GanttEx.Marker`)."
   attr :ctx, :map, required: true

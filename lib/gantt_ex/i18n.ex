@@ -109,6 +109,8 @@ defmodule GanttEx.I18n do
   def labels(locale) do
     with_locale(locale, fn ->
       %{
+        # the normalized locale, to translate counts with the labels
+        locale: Gettext.get_locale(GanttEx.Gettext),
         # grid
         task_name: gettext("Task name"),
         start_time: gettext("Start time"),
@@ -194,6 +196,13 @@ defmodule GanttEx.I18n do
         to: gettext("To"),
         no_matches: gettext("No matching tasks"),
         no_options: gettext("No options found"),
+        lookahead: gettext("Lookahead"),
+        lookahead_off: gettext("Whole schedule"),
+        # weekly plan and legend
+        week_plan: gettext("Weekly plan"),
+        committed: gettext("Committed"),
+        not_committed: gettext("Not committed"),
+        legend: gettext("Legend"),
         # columns
         columns: gettext("Columns"),
         reset: gettext("Reset"),

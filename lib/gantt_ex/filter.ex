@@ -19,6 +19,11 @@ defmodule GanttEx.Filter do
       (see `GanttEx.Task`)
     * `:type` - tasks, projects and milestones
     * `:dates` - tasks overlapping a range of days
+    * `:lookahead` - tasks overlapping the next weeks (Last Planner
+      lookahead): from the start of the current week (`:week_start` of the
+      chart) and as many weeks as chosen. The chart offers it as its own
+      toolbar menu and shows only those weeks. Not in the defaults; the
+      weeks offered can be changed with `%{id: :lookahead, weeks: [2, 4, 6]}`.
 
   Custom filters are maps:
 
@@ -63,6 +68,7 @@ defmodule GanttEx.Filter do
         status: [:overdue, :blocked],
         type: [:task],
         dates: %{from: ~D[2025-01-01], to: ~D[2025-01-31]},
+        lookahead: 3,
         responsible: [1, nil]
       }
 
@@ -90,13 +96,15 @@ defmodule GanttEx.Filter do
 
   alias GanttEx.{Dates, Store, Task, TaskForm}
 
-  @builtins [:search, :status, :type, :dates]
+  @defaults [:search, :status, :type, :dates]
+  @builtins @defaults ++ [:lookahead]
+  @lookahead_weeks [1, 2, 3, 4, 6]
   @statuses [:not_started, :in_progress, :completed, :overdue, :critical, :blocked, :restricted]
   @none "__none__"
   @searchable_above 8
 
   @typedoc "The kind of a filter: one of the built-in ones, or `:options` for custom filters."
-  @type kind :: :search | :status | :type | :dates | :options
+  @type kind :: :search | :status | :type | :dates | :lookahead | :options
 
   @typedoc "A normalized option."
   @type option :: %{
@@ -127,7 +135,8 @@ defmodule GanttEx.Filter do
   @typedoc """
   What matching needs to know besides the tasks:
 
-    * `:today` - the current date, for `:overdue`. Defaults to now.
+    * `:today` - the current date, for `:overdue` and `:lookahead`. Defaults to now.
+    * `:week_start` - the first ISO day of the week, for `:lookahead`. Defaults to `1`.
     * `:unit` - the duration unit, to know when a deadline is past. Defaults to `:day`.
     * `:analysis` - a `GanttEx.CriticalPath.analyze/1` result, for `:critical`.
     * `:wbs` - the WBS codes (`GanttEx.Store.wbs_codes/1`), for the search.
@@ -138,6 +147,7 @@ defmodule GanttEx.Filter do
   @type context :: %{
           optional(:today) => NaiveDateTime.t(),
           optional(:unit) => Dates.unit(),
+          optional(:week_start) => 1..7,
           optional(:analysis) => map() | nil,
           optional(:wbs) => %{Task.id() => String.t()},
           optional(:index) => search_index(),
@@ -151,7 +161,7 @@ defmodule GanttEx.Filter do
   Returns the default filters: `[:search, :status, :type, :dates]`.
   """
   @spec defaults() :: [atom()]
-  def defaults, do: @builtins
+  def defaults, do: @defaults
 
   @doc """
   Returns the statuses of the `:status` filter.
@@ -188,7 +198,7 @@ defmodule GanttEx.Filter do
   @spec definitions(list() | boolean() | nil, map(), keyword()) :: [definition()]
   def definitions(filters, labels, opts \\ [])
   def definitions(filters, _labels, _opts) when filters in [nil, false, []], do: []
-  def definitions(true, labels, opts), do: definitions(@builtins, labels, opts)
+  def definitions(true, labels, opts), do: definitions(@defaults, labels, opts)
 
   def definitions(filters, labels, opts) when is_list(filters) do
     filters
@@ -197,6 +207,15 @@ defmodule GanttEx.Filter do
   end
 
   defp definition(id, labels, opts) when id in @builtins, do: builtin(id, labels, opts)
+
+  defp definition(%{id: :lookahead, weeks: weeks} = map, labels, opts) when is_list(weeks) do
+    weeks = weeks |> Enum.filter(&(is_integer(&1) and &1 > 0)) |> Enum.uniq() |> Enum.sort()
+
+    map
+    |> Map.delete(:weeks)
+    |> definition(labels, opts)
+    |> Map.put(:options, lookahead_options(weeks, labels))
+  end
 
   defp definition(%{id: id} = map, labels, opts)
        when id in @builtins and not is_map_key(map, :options) and not is_map_key(map, :field) do
@@ -245,6 +264,13 @@ defmodule GanttEx.Filter do
 
   defp builtin(:dates, labels, _opts), do: base(:dates, labels.dates, %{})
 
+  defp builtin(:lookahead, labels, _opts) do
+    base(:lookahead, labels.lookahead, %{
+      options: lookahead_options(@lookahead_weeks, labels),
+      multiple: false
+    })
+  end
+
   defp base(id, label, extra) do
     Map.merge(
       %{
@@ -259,6 +285,11 @@ defmodule GanttEx.Filter do
       },
       extra
     )
+  end
+
+  defp lookahead_options(weeks, labels) do
+    for count <- weeks,
+        do: option(%{label: GanttEx.I18n.duration(count, :week, labels.locale), value: count})
   end
 
   defp status_option(status, labels) do
@@ -403,6 +434,11 @@ defmodule GanttEx.Filter do
 
   defp normalize_value(%{kind: :dates}, _value), do: nil
 
+  defp normalize_value(%{kind: :lookahead, options: options}, value) do
+    key = value |> List.wrap() |> List.last() |> option_key()
+    Enum.find_value(options, &(&1.key == key && &1.value))
+  end
+
   defp normalize_value(%{options: options} = definition, value) do
     keys = value |> List.wrap() |> Enum.map(&option_key/1)
     by_key = Map.new(options, &{&1.key, &1})
@@ -456,6 +492,27 @@ defmodule GanttEx.Filter do
   @spec invalid_range?(map() | nil) :: boolean()
   def invalid_range?(%{from: %Date{} = from, to: %Date{} = to}), do: Date.compare(from, to) == :gt
   def invalid_range?(_dates), do: false
+
+  @doc """
+  Returns the days of a lookahead of `weeks` weeks: from the first day of
+  the week of `today` (weeks start on the ISO day `week_start`) to the last
+  day of the last week, both included.
+
+      iex> GanttEx.Filter.lookahead_range(3, ~D[2026-10-28], 1)
+      %{from: ~D[2026-10-26], to: ~D[2026-11-15]}
+
+      iex> GanttEx.Filter.lookahead_range(1, ~N[2026-10-28 10:00:00], 7)
+      %{from: ~D[2026-10-25], to: ~D[2026-10-31]}
+  """
+  @spec lookahead_range(pos_integer(), Date.t() | NaiveDateTime.t(), 1..7) :: %{
+          from: Date.t(),
+          to: Date.t()
+        }
+  def lookahead_range(weeks, today, week_start \\ 1) do
+    today = cast_date(today)
+    from = Date.add(today, -Integer.mod(Date.day_of_week(today) - week_start, 7))
+    %{from: from, to: Date.add(from, weeks * 7 - 1)}
+  end
 
   # -- matching ----------------------------------------------------------------
 
@@ -577,6 +634,12 @@ defmodule GanttEx.Filter do
       to = to && NaiveDateTime.new!(Date.add(to, 1), ~T[00:00:00])
       fn task -> overlaps?(task, from, to) end
     end
+  end
+
+  defp predicate(%{kind: :lookahead}, weeks, ctx) do
+    today = Map.get_lazy(ctx, :today, &NaiveDateTime.local_now/0)
+    range = lookahead_range(weeks, today, Map.get(ctx, :week_start, 1))
+    predicate(%{kind: :dates}, range, ctx)
   end
 
   defp predicate(%{kind: :options, field: field}, selected, _ctx) do

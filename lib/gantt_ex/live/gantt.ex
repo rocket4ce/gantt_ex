@@ -101,8 +101,8 @@ defmodule GanttEx.Live.Gantt do
   Filters and columns:
 
     * `:filters` - the search and filters offered by the toolbar: any of
-      `:search`, `:status`, `:type` and `:dates`, and custom filters given as
-      maps (see `GanttEx.Filter`):
+      `:search`, `:status`, `:type`, `:dates` and `:lookahead`, and custom
+      filters given as maps (see `GanttEx.Filter`):
 
           filters={[:search, :status, %{id: :responsible, label: "Responsible",
                      field: :responsible_id, options: [{"Unassigned", nil} | @people]}]}
@@ -110,6 +110,12 @@ defmodule GanttEx.Live.Gantt do
       Defaults to `[:search, :status, :type, :dates]`; `false` or `[]` remove
       the search and the filter panel. Matching tasks are shown with their
       ancestors, and rows cannot be reordered while filtering.
+
+      `:lookahead` (Last Planner) has its own toolbar menu to choose a number
+      of weeks: from the start of the current week (`:week_start`), the chart
+      shows only those weeks and the tasks overlapping them, and switches to
+      the `:day` zoom level when the scale was coarser. Its value is the
+      number of weeks (`%{lookahead: 3}`).
     * `:filter_values` - the selected filters, to restore them:
       `%{search: "slab", status: [:blocked], responsible: ["uuid-1", nil],
       dates: %{from: ~D[2025-01-01], to: ~D[2025-01-31]}}`. A different value
@@ -133,6 +139,10 @@ defmodule GanttEx.Live.Gantt do
     * `:today` - the current date, used by the "Today" button. Defaults to now.
     * `:markers` - vertical lines marking dates (see `GanttEx.Marker`).
     * `:today_marker` - add a marker for today. Defaults to `false`.
+    * `:week_plan` - the weekly plan (Last Planner) to show: `%{week: date,
+      committed: task_ids, label: "Week 45"}`. The week (any of its days) is
+      highlighted, the bars of the committed tasks are green and the other
+      tasks are muted. `nil` (the default) or `false` show the chart as usual.
 
   Appearance:
 
@@ -147,6 +157,17 @@ defmodule GanttEx.Live.Gantt do
     * `:export_formats` - formats offered by the toolbar: `:json`, `:csv`, `:ical`,
       `:ms_project`, `:svg` and `:png` (see `GanttEx.Export`).
     * `:export_filename` - base name of exported files. Defaults to `"gantt"`.
+    * `:summary_bars` - how summary tasks (projects with children) are drawn:
+      `:bar` (the default, like tasks) or `:bracket` (a thin bar with
+      downward ends, as in MS Project) with the name after it.
+    * `:legend` - show a legend of the colors and icons of the chart below
+      it. Defaults to `false`.
+    * `:legend_items` - more legend entries, after the built-in ones:
+      `%{label: "Concrete Ltd.", color: "#0ea5e9", shape: :bar}` where
+      `:shape` is `:bar` (the default), `:dot` or `:line`, or
+      `%{label: "Has photos", icon: :camera}` with an icon of
+      `GanttEx.Live.Icons`. Entries with a `:group` (`"Partner"`) are shown
+      after the title of their group.
     * `:task_class` - a function returning extra CSS classes for a task bar.
     * `:class` - extra classes for the root element.
 
@@ -256,6 +277,10 @@ defmodule GanttEx.Live.Gantt do
     calendars: [],
     markers: [],
     today_marker: false,
+    week_plan: nil,
+    summary_bars: :bar,
+    legend: false,
+    legend_items: [],
     undo: true,
     auto_scheduling: false,
     auto_scheduling_strict: false,
@@ -600,10 +625,11 @@ defmodule GanttEx.Live.Gantt do
     filtering = run_filters(a, today)
 
     rows = rows(a, filtering)
-    timeline = build_timeline(a, level, today)
+    timeline = build_timeline(a, level, today, filtering.lookahead)
     layout = layout(a, rows, timeline, bar_height)
     grid_width = grid_width(a, columns)
     chart_height = max(layout.height, 0)
+    week_plan = week_plan(a, timeline)
 
     socket =
       if {timeline, a.labels_locale, a.store.calendar, a.weekend} == a[:scale_key] do
@@ -645,6 +671,8 @@ defmodule GanttEx.Live.Gantt do
         a.resource_panel && a.resources != [] &&
           ResourceLoad.compute(a.store, a.resources, timeline),
       marker_items: marker_items(a, timeline, today),
+      week_plan_view: week_plan,
+      legend_entries: a.legend && legend_entries(a, show_critical, week_plan),
       root_style: root_style(a, columns, grid_width, bar_height, level),
       ctx: %{
         id: a.id,
@@ -829,9 +857,15 @@ defmodule GanttEx.Live.Gantt do
           cache
       end
 
+    lookahead =
+      case values do
+        %{lookahead: weeks} -> Filter.lookahead_range(weeks, today, a.week_start)
+        _ -> nil
+      end
+
     key =
       {a.store, values, a.filter, :critical in statuses and a.analysis,
-       :overdue in statuses and today}
+       :overdue in statuses and today, lookahead}
 
     {visible, matched} =
       case a.filter_cache do
@@ -843,6 +877,7 @@ defmodule GanttEx.Live.Gantt do
 
           Filter.visible(a.store, definitions, values, %{
             today: today,
+            week_start: a.week_start,
             unit: a.duration_unit,
             analysis: a.analysis,
             index: index,
@@ -858,6 +893,7 @@ defmodule GanttEx.Live.Gantt do
       matched: matched,
       total: Store.task_count(a.store),
       active: values != %{},
+      lookahead: lookahead,
       cache: {key, {visible, matched}},
       search_cache: search_cache
     }
@@ -915,11 +951,16 @@ defmodule GanttEx.Live.Gantt do
   defp today(%{today: nil}), do: NaiveDateTime.local_now() |> NaiveDateTime.truncate(:second)
   defp today(%{today: today}), do: Dates.cast!(today)
 
-  defp build_timeline(a, level, today) do
+  defp build_timeline(a, level, today, lookahead) do
     {start, finish} =
       case {Dates.cast!(a.start_date), Dates.cast!(a.end_date)} do
         {%NaiveDateTime{} = start, %NaiveDateTime{} = finish} ->
           {start, finish}
+
+        # the lookahead shows its weeks only
+        _ when lookahead != nil ->
+          {NaiveDateTime.new!(lookahead.from, ~T[00:00:00]),
+           NaiveDateTime.new!(Date.add(lookahead.to, 1), ~T[00:00:00])}
 
         _ ->
           Timeline.fit(Store.date_range(a.store), level.scales,
@@ -944,6 +985,8 @@ defmodule GanttEx.Live.Gantt do
 
     Map.merge(bar, %{
       selected: MapSet.member?(a.selection, bar.key),
+      summary: summary,
+      commitment: commitment(task, bar, a.week_plan_view),
       drag: if(editable and not summary, do: "move", else: "none"),
       resizable: editable and not summary and task.type != :milestone,
       progress_editable: editable and task.type != :milestone,
@@ -956,6 +999,111 @@ defmodule GanttEx.Live.Gantt do
           match?(%{critical: true}, a.analysis.tasks[task.id]),
       slack_width: slack_width(task, a)
     })
+  end
+
+  # Tasks in the weekly plan, and the other tasks (muted). Summary tasks and
+  # milestones out of the plan keep their colors.
+  defp commitment(_task, _bar, nil), do: nil
+  defp commitment(_task, %{group: group}, _plan) when group not in [nil, false], do: nil
+  defp commitment(%Task{type: :project}, _bar, _plan), do: nil
+
+  defp commitment(task, _bar, plan) do
+    cond do
+      MapSet.member?(plan.committed, Store.key(task.id)) -> :committed
+      task.type == :milestone -> nil
+      true -> :not_committed
+    end
+  end
+
+  # The week of the plan on the timeline (nil when there is no plan or when
+  # the week is out of the visible range).
+  defp week_plan(%{week_plan: plan}, _timeline) when plan in [nil, false], do: nil
+
+  defp week_plan(%{week_plan: plan} = a, timeline) do
+    plan = Map.new(plan)
+
+    from =
+      plan
+      |> Map.get(:week, Map.get(plan, "week"))
+      |> Dates.cast!()
+      |> Dates.floor(:week, week_start: a.week_start)
+
+    to = Dates.add(from, 7, :day)
+    committed = Map.get(plan, :committed, Map.get(plan, "committed")) || []
+    left = Timeline.x(timeline, Dates.max(from, timeline.start_date))
+    right = Timeline.x(timeline, Dates.min(to, timeline.end_date))
+
+    %{
+      from: from,
+      to: to,
+      label: Map.get(plan, :label, Map.get(plan, "label")),
+      committed: MapSet.new(committed, &Store.key/1),
+      band: if(right > left, do: %{x: left, width: right - left})
+    }
+  end
+
+  # What the legend explains: the bars and marks the chart can show, then the
+  # entries of the host.
+  defp legend_entries(a, show_critical, week_plan) do
+    labels = a.labels
+
+    builtin = [
+      if(week_plan, do: %{key: "committed", label: labels.committed, kind: :committed}),
+      if(week_plan,
+        do: %{key: "not-committed", label: labels.not_committed, kind: :not_committed}
+      ),
+      if(week_plan,
+        do: %{key: "week-plan", label: week_plan.label || labels.week_plan, kind: :week}
+      ),
+      %{key: "task", label: labels.task, kind: :task},
+      %{key: "progress", label: labels.progress, kind: :progress},
+      %{key: "project", label: labels.project, kind: {:summary, a.summary_bars}},
+      %{key: "milestone", label: labels.milestone, kind: :milestone},
+      if(show_critical, do: %{key: "critical", label: labels.critical_path, kind: :critical}),
+      if(a.baselines, do: %{key: "baseline", label: labels.baseline, kind: :baseline}),
+      %{key: "deadline", label: labels.deadline, kind: :deadline},
+      %{key: "overdue", label: labels.overdue, kind: :overdue},
+      %{key: "blocked", label: labels.blocked, kind: {:icon, :lock_closed}},
+      %{key: "restricted", label: labels.restricted, kind: {:icon, :exclamation_triangle}},
+      if(a.today_marker, do: %{key: "today", label: labels.today, kind: :today})
+    ]
+
+    custom =
+      a.legend_items
+      |> Enum.map(&Map.new/1)
+      |> Enum.with_index()
+      |> Enum.flat_map_reduce(nil, fn {item, index}, group ->
+        color =
+          case Task.cast_color(Map.get(item, :color)) do
+            {:ok, color} -> color
+            :error -> nil
+          end
+
+        kind =
+          case Map.get(item, :icon) do
+            nil -> {:shape, Map.get(item, :shape, :bar)}
+            icon -> {:icon, icon}
+          end
+
+        entry = %{
+          key: "item-#{index}",
+          label: to_string(Map.get(item, :label, "")),
+          kind: kind,
+          color: color
+        }
+
+        # a title before the first entry of each group
+        case Map.get(item, :group) do
+          same when same in [nil, group] ->
+            {[entry], group}
+
+          title ->
+            {[%{key: "group-#{index}", label: to_string(title), kind: :group}, entry], title}
+        end
+      end)
+      |> elem(0)
+
+    Enum.reject(builtin, &is_nil/1) ++ custom
   end
 
   # Deadlines are inclusive days: a task due on the 10th may end on the 10th.
@@ -1112,7 +1260,13 @@ defmodule GanttEx.Live.Gantt do
     ~H"""
     <div
       id={@id}
-      class={["gx-root", @class]}
+      class={[
+        "gx-root",
+        @summary_bars == :bracket && "gx-root--bracket",
+        @filtering.lookahead && "gx-root--windowed",
+        @week_plan_view && "gx-root--week-plan",
+        @class
+      ]}
       style={@root_style}
       data-gx-theme={@theme}
       data-gx-snap={@snap_px}
@@ -1167,7 +1321,11 @@ defmodule GanttEx.Live.Gantt do
               sort={@sort}
               grid_width={@grid_width_value}
             />
-            <.scale rows={@scale_rows} width={@chart_width} />
+            <.scale
+              rows={@scale_rows}
+              width={@chart_width}
+              band={@week_plan_view && @week_plan_view.band}
+            />
           </div>
           <div class="gx-body">
             <div
@@ -1221,6 +1379,11 @@ defmodule GanttEx.Live.Gantt do
               data-gx-chart
             >
               <.highlights highlights={@highlights} />
+              <.week_band
+                :if={@week_plan_view && @week_plan_view.band}
+                ctx={@ctx}
+                plan={@week_plan_view}
+              />
               <.markers ctx={@ctx} markers={@marker_items} />
               <.row_marks ctx={@ctx} bars={@window_bars} />
               <.rollups ctx={@ctx} rollups={@window_rollups} />
@@ -1252,6 +1415,8 @@ defmodule GanttEx.Live.Gantt do
           />
         </div>
       </div>
+
+      <.legend :if={@legend_entries} ctx={@ctx} entries={@legend_entries} />
 
       <div :if={@notice} class="gx-notice" role="status">
         <span>{@notice}</span>
@@ -1355,6 +1520,17 @@ defmodule GanttEx.Live.Gantt do
     {:noreply, push_event(socket, "gantt_ex:scroll", %{id: socket.assigns.id, x: x})}
   end
 
+  def handle_event("lookahead", %{"weeks" => weeks}, socket) do
+    state = socket.assigns.filter_state
+
+    state =
+      if weeks in ["", nil],
+        do: Map.delete(state, :lookahead),
+        else: Map.put(state, :lookahead, weeks)
+
+    {:noreply, socket |> lookahead_zoom(state) |> put_filters(state)}
+  end
+
   def handle_event("key", %{"key" => key}, socket) do
     a = socket.assigns
 
@@ -1386,7 +1562,12 @@ defmodule GanttEx.Live.Gantt do
   def handle_event("filters_change", params, socket) do
     a = socket.assigns
     definitions = filter_definitions(a, true)
-    panel = params |> Map.get("filters", %{}) |> Map.put("search", a.filter_state[:search])
+    # the search and the lookahead have their own controls
+    panel =
+      params
+      |> Map.get("filters", %{})
+      |> Map.put("search", a.filter_state[:search])
+      |> Map.put("lookahead", a.filter_state[:lookahead])
 
     queries =
       for definition <- definitions,
@@ -2185,6 +2366,21 @@ defmodule GanttEx.Live.Gantt do
 
   defp find_filter(a, id),
     do: a |> filter_definitions(true) |> Enum.find(&(to_string(&1.id) == id))
+
+  # A lookahead is read day by day: coarser scales switch to the :day level.
+  defp lookahead_zoom(socket, state) do
+    a = socket.assigns
+    minor = List.last(Zoom.find(a.zoom_levels, a.zoom_name).scales)
+
+    day_level =
+      Enum.find(a.zoom_levels, &(&1.name == :day)) ||
+        Enum.find(a.zoom_levels, &(List.last(&1.scales).unit == :day))
+
+    if Map.has_key?(state, :lookahead) and not Map.has_key?(a.filter_state, :lookahead) and
+         minor.unit not in [:minute, :hour, :day] and day_level != nil,
+       do: assign(socket, zoom_name: day_level.name),
+       else: socket
+  end
 
   defp remove_option(values, key),
     do: Enum.reject(List.wrap(values), &(Filter.option_key(&1) == key))

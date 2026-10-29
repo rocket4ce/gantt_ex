@@ -16,6 +16,61 @@ defmodule GanttEx.FilterTest do
     Filter.match?(task, defs, Filter.normalize(values, defs), ctx)
   end
 
+  describe "lookahead" do
+    test "offers weeks and keeps one of them" do
+      [lookahead] = definitions([:lookahead])
+      assert Enum.map(lookahead.options, & &1.value) == [1, 2, 3, 4, 6]
+      assert Enum.map(lookahead.options, & &1.label) |> Enum.take(2) == ["1 week", "2 weeks"]
+
+      assert Filter.normalize(%{"lookahead" => "3"}, [lookahead]) == %{lookahead: 3}
+      assert Filter.normalize(%{lookahead: 4}, [lookahead]) == %{lookahead: 4}
+      assert Filter.normalize(%{lookahead: 5}, [lookahead]) == %{}
+      assert Filter.normalize(%{lookahead: ""}, [lookahead]) == %{}
+
+      [custom] = definitions([%{id: :lookahead, weeks: [8, 4, 0, 4], label: "LAP"}])
+      assert {custom.label, Enum.map(custom.options, & &1.value)} == {"LAP", [4, 8]}
+    end
+
+    test "matches the tasks overlapping the weeks from the current one" do
+      # Wednesday: the week starts on Monday the 6th, or Sunday the 5th
+      ctx = %{today: ~N[2025-01-08 10:00:00]}
+
+      assert matches?([:lookahead], %{lookahead: 1}, %{start_date: ~D[2025-01-10]}, ctx)
+      refute matches?([:lookahead], %{lookahead: 1}, %{start_date: ~D[2025-01-13]}, ctx)
+      assert matches?([:lookahead], %{lookahead: 2}, %{start_date: ~D[2025-01-13]}, ctx)
+      # started the week before and still going on
+      assert matches?(
+               [:lookahead],
+               %{lookahead: 1},
+               %{start_date: ~D[2025-01-02], duration: 5},
+               ctx
+             )
+
+      refute matches?(
+               [:lookahead],
+               %{lookahead: 1},
+               %{start_date: ~D[2025-01-02], duration: 3},
+               ctx
+             )
+
+      sunday = Map.put(ctx, :week_start, 7)
+
+      refute matches?(
+               [:lookahead],
+               %{lookahead: 1},
+               %{start_date: ~D[2025-01-11]},
+               ctx |> Map.put(:week_start, 1) |> Map.put(:today, ~N[2025-01-05 10:00:00])
+             )
+
+      assert matches?([:lookahead], %{lookahead: 1}, %{start_date: ~D[2025-01-11]}, sunday)
+      refute matches?([:lookahead], %{lookahead: 1}, %{start_date: ~D[2025-01-12]}, sunday)
+    end
+
+    test "is not a default filter" do
+      refute :lookahead in Filter.defaults()
+    end
+  end
+
   describe "definitions/3" do
     test "default to search, status, type and dates" do
       assert Enum.map(definitions(true), & &1.id) == [:search, :status, :type, :dates]

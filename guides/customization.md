@@ -147,6 +147,54 @@ the `gx-row--blocked`, `gx-row--restricted`, `gx-bar--blocked` and
 }
 ```
 
+## Last Planner: lookahead and weekly plan
+
+Add `:lookahead` to the `filters` to get a toolbar menu that shows the next
+weeks only: from the start of the current week (`week_start`) and as many
+weeks as chosen (1, 2, 3, 4 or 6, or `%{id: :lookahead, weeks: [2, 4, 6]}`).
+The timeline shows those weeks day by day and only the tasks overlapping
+them, with their summary tasks. The value is part of the filter values
+(`%{lookahead: 3}`), so it is reported with `:filters_changed` and can be
+restored with `filter_values`.
+
+`week_plan` shows the commitments of a week:
+
+```heex
+week_plan={%{week: ~D[2025-03-03], committed: @committed_ids, label: "Week 10"}}
+```
+
+The week is highlighted on the scale and the chart, the bars of the committed
+tasks are green and the other tasks are muted (summary tasks and milestones
+keep their colors; critical tasks keep a red underline). The colors are
+custom properties:
+
+```css
+.gx-root {
+  --gx-week: #14b8a6;
+  --gx-week-soft: rgba(20, 184, 166, 0.07);
+  --gx-committed: #bbf7d0;
+  --gx-committed-progress: #4ade80;
+  --gx-committed-border: #22c55e;
+  --gx-not-committed: #c3d2dd;
+  --gx-not-committed-progress: #8ca6b9;
+}
+```
+
+## Legend and summary bars
+
+`legend` adds a legend below the chart with the bars and marks it can show
+(tasks, progress, summary tasks, milestones, critical path, baselines,
+deadlines, overdue, blocked, restrictions, today and the weekly plan).
+`legend_items` adds your own entries, such as the colors of your bars:
+
+```heex
+legend_items={[%{label: "Concrete Ltd.", color: "#0ea5e9"}, %{label: "Rain", icon: :exclamation_triangle}]}
+```
+
+`summary_bars={:bracket}` draws summary tasks as in MS Project: a thin bar
+with downward ends and the name after it. Summary bars get the
+`gx-bar--summary` class.
+
 ## Bars and tooltips
 
 ```heex
