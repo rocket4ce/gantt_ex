@@ -236,6 +236,7 @@ defmodule GanttEx.I18n do
         expand_all: gettext("Expand all"),
         collapse_all: gettext("Collapse all"),
         fullscreen: gettext("Fullscreen"),
+        all_columns: gettext("All the columns"),
         export: gettext("Export"),
         print: gettext("Print"),
         # zoom levels

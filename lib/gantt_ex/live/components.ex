@@ -52,6 +52,9 @@ defmodule GanttEx.Live.Components do
     default: nil,
     doc: "every available column for the column chooser (see `GanttEx.Live.Columns.available/3`)"
 
+  attr :compact, :boolean, default: false, doc: "a narrow chart (a phone): the grid shows names"
+  attr :full_grid, :boolean, default: false, doc: "the whole grid is shown on a narrow chart"
+
   slot :inner_block
 
   def toolbar(assigns) do
@@ -104,6 +107,20 @@ defmodule GanttEx.Live.Components do
           <.icon name={:redo} />
         </button>
       </div>
+
+      <button
+        :if={@compact}
+        id={"#{@ctx.id}-grid-toggle"}
+        type="button"
+        class={["gx-btn gx-btn--icon", @full_grid && "gx-btn--active"]}
+        title={@ctx.labels.all_columns}
+        aria-label={@ctx.labels.all_columns}
+        aria-pressed={to_string(@full_grid)}
+        phx-click="toggle_grid"
+        phx-target={@ctx.myself}
+      >
+        <.icon name={:view_columns} />
+      </button>
 
       <div class="gx-toolbar-group">
         <button

@@ -127,12 +127,34 @@ defmodule GanttEx.Live.Hook do
           }
           this.onFullscreen = () => this.toggleFullscreen()
           this.onPrint = () => window.print()
+          // The menus of the toolbar (<details class="gx-menu">): one open at a
+          // time, closed by Escape (back to their button) or a click or tap
+          // outside them, which on a phone would leave them over the chart
+          this.openMenus = () => Array.from(this.el.querySelectorAll("details.gx-menu[open]"))
+          this.onMenuToggle = (e) => {
+            const menu = e.target
+            if (!(menu instanceof HTMLDetailsElement) || !menu.matches(".gx-menu") || !menu.open) return
+            this.openMenus().forEach((other) => { if (other !== menu) other.open = false })
+          }
+          this.onOutsidePointer = (e) => {
+            this.openMenus().forEach((menu) => { if (!menu.contains(e.target)) menu.open = false })
+          }
+          this.onMenuEscape = (e) => {
+            if (e.key !== "Escape") return
+            this.openMenus().forEach((menu) => {
+              menu.open = false
+              menu.querySelector("summary")?.focus()
+            })
+          }
 
           this.el.addEventListener("pointerdown", this.onPointerDown)
           this.el.addEventListener("dblclick", this.onDblClick)
           this.el.addEventListener("contextmenu", this.onContextMenu)
           this.el.addEventListener("keydown", this.onKeyDown)
           this.el.addEventListener("click", this.onClickCapture, true)
+          this.el.addEventListener("toggle", this.onMenuToggle, true)
+          document.addEventListener("pointerdown", this.onOutsidePointer, true)
+          document.addEventListener("keydown", this.onMenuEscape)
           this.el.addEventListener("gantt_ex:fullscreen", this.onFullscreen)
           this.el.addEventListener("gantt_ex:print", this.onPrint)
 
@@ -184,6 +206,8 @@ defmodule GanttEx.Live.Hook do
           this.stopTracking && this.stopTracking()
           this.resizeObserver.disconnect()
           window.removeEventListener("resize", this.onResize)
+          document.removeEventListener("pointerdown", this.onOutsidePointer, true)
+          document.removeEventListener("keydown", this.onMenuEscape)
         },
 
         // -- configuration ---------------------------------------------------

@@ -384,6 +384,10 @@ defmodule GanttEx.Live.Gantt do
        viewport: %{top: 0, height: 900},
        # the width of the viewport, reported by the hook (see build_timeline/5)
        viewport_width: nil,
+       # On a phone: the whole grid instead of the names only, and a width
+       # resized there (never saved, see grid_width/2)
+       full_grid: false,
+       compact_grid_width: nil,
        history: History.new(),
        show_critical: nil,
        analysis: nil,
@@ -652,7 +656,9 @@ defmodule GanttEx.Live.Gantt do
       end)
 
     available = available_columns(a)
-    columns = Enum.filter(available, & &1.visible)
+    visible = Enum.filter(available, & &1.visible)
+    grid_width = grid_width(a, visible)
+    columns = if compact_grid?(a), do: compact_columns(visible, grid_width), else: visible
     context_actions = Columns.context_actions(a.context_menu, available, a.labels, a.readonly)
     a = Map.merge(a, %{ctx_resources: ctx_resources, columns: columns})
     selection = normalize_selection(a)
@@ -662,7 +668,6 @@ defmodule GanttEx.Live.Gantt do
     filtering = run_filters(a, today)
 
     rows = rows(a, filtering)
-    grid_width = grid_width(a, columns)
     timeline = build_timeline(a, level, today, filtering.lookahead, grid_width)
     layout = layout(a, rows, timeline, bar_height)
     chart_height = max(layout.height, 0)
@@ -1310,8 +1315,46 @@ defmodule GanttEx.Live.Gantt do
     end
   end
 
+  # Below this width of the chart (a phone), the grid shows the names only
+  @compact_width 640
+
+  defp compact?(%{viewport_width: width}), do: is_number(width) and width < @compact_width
+
+  defp compact_grid?(a), do: compact?(a) and not a.full_grid
+
+  # The width the grid takes, from the width set by the user (or the
+  # `:grid_width` attribute, or its columns), never more than 60% of the
+  # chart so the timeline stays usable; that width is kept as it was set. On
+  # a phone, the names take 30% (or the width resized there) and the whole
+  # grid up to 90%.
   defp grid_width(a, columns) do
-    a.column_state.grid_width || a.grid_width || Columns.total_width(columns)
+    width = a.column_state.grid_width || a.grid_width || Columns.total_width(columns)
+
+    case a.viewport_width do
+      viewport when not is_number(viewport) ->
+        width
+
+      viewport when viewport < @compact_width ->
+        if a.full_grid,
+          do: min(width, round(viewport * 0.9)),
+          else: a.compact_grid_width || compact_width(columns, viewport)
+
+      viewport ->
+        min(width, round(viewport * 0.6))
+    end
+  end
+
+  defp compact_width(columns, viewport) do
+    names = Enum.find(columns, & &1.tree) || List.first(columns)
+    (names && names.width) |> Kernel.||(160) |> min(round(viewport * 0.3)) |> max(80)
+  end
+
+  # The names column alone, as wide as the grid
+  defp compact_columns(columns, grid_width) do
+    case Enum.find(columns, & &1.tree) || List.first(columns) do
+      nil -> []
+      names -> [%{names | width: grid_width}]
+    end
   end
 
   defp available_columns(a, state \\ nil) do
@@ -1386,6 +1429,8 @@ defmodule GanttEx.Live.Gantt do
         filters={@filtering.definitions != [] && Map.put(@filtering, :queries, @filter_queries)}
         columns={@column_choices}
         popover={@popover}
+        compact={compact?(assigns)}
+        full_grid={@full_grid}
       >
         {render_slot(@toolbar_actions)}
       </.toolbar>
@@ -1637,15 +1682,24 @@ defmodule GanttEx.Live.Gantt do
     {:noreply, put_filters(socket, state)}
   end
 
-  # The width of the viewport only matters to a lookahead (see fit_lookahead/4)
+  # On a phone: the whole grid over the timeline, or the names only
+  def handle_event("toggle_grid", _params, socket),
+    do: {:noreply, socket |> update(:full_grid, &(not &1)) |> prepare()}
+
+  # The width of the viewport limits the grid (see grid_width/2) and
+  # stretches a lookahead (see fit_lookahead/4)
   def handle_event("gx:width", %{"width" => width}, socket) do
     case Interaction.number(width) do
       width when is_number(width) and width > 0 ->
+        old = socket.assigns
         socket = assign(socket, :viewport_width, min(round(width), 20_000))
+        a = socket.assigns
+        visible = a |> available_columns() |> Enum.filter(& &1.visible)
 
-        if socket.assigns.filtering.lookahead,
-          do: {:noreply, prepare(socket)},
-          else: {:noreply, socket}
+        if old.filtering.lookahead || compact?(old) != compact?(a) ||
+             grid_width(a, visible) != old.grid_width_value,
+           do: {:noreply, prepare(socket)},
+           else: {:noreply, socket}
 
       _ ->
         {:noreply, socket}
@@ -2348,6 +2402,17 @@ defmodule GanttEx.Live.Gantt do
     socket =
       case {column, Interaction.number(width)} do
         {_, nil} ->
+          socket
+
+        # resizing on a phone doesn't change the layout of other screens
+        {"__grid", width} when a.viewport_width < @compact_width and not a.full_grid ->
+          assign(
+            socket,
+            :compact_grid_width,
+            width |> round() |> max(80) |> min(a.viewport_width)
+          )
+
+        {_column, _width} when a.viewport_width < @compact_width ->
           socket
 
         {"__grid", width} ->

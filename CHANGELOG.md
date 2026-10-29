@@ -22,8 +22,19 @@ Additions:
   column, a list gives them like that column. It turns to stay inside the
   chart, the arrow keys go through it and Escape or a click outside close
   it. `GanttEx.Live.Columns.context_actions/4` builds its actions
+- Narrow screens: on a phone (a chart under 640px wide) the grid shows the
+  task names only, with a toolbar toggle ("All the columns") for the whole
+  grid over the timeline. Resizing the grid there changes nothing saved: no
+  `:columns_changed` event
 
 Changes:
+
+- The grid takes at most 60% of the width of the chart, so a width saved
+  on a wide screen no longer squeezes the timeline on a laptop. The width
+  set by the user is kept as it was
+- The menus of the toolbar (lookahead, export) close with Escape (back to
+  their button), with a click or tap outside them, and when another one
+  opens
 
 - An end edited onto a non-working day (resized or typed) no longer
   leaves the bar covering days nobody works, and resizing the start onto
