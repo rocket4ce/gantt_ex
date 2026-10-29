@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.0 (unreleased)
+
+Last Planner views and a legend.
+
+Additions:
+
+- `:lookahead` filter: a toolbar menu to show the next 1, 2, 3, 4 or 6 weeks
+  (or the weeks given with `%{id: :lookahead, weeks: [...]}`) from the start
+  of the current week. The timeline shows those weeks only, day by day, and
+  the tasks overlapping them. Not in the default filters
+- `GanttEx.Filter.lookahead_range/3`
+- `:week_plan` attribute: the week is highlighted on the scale and the
+  chart, committed tasks are green and the other tasks muted
+- `:legend` and `:legend_items` attributes: a legend of the colors and icons
+  of the chart, with entries of the host
+- `:summary_bars` attribute: `:bracket` draws summary tasks as in MS Project.
+  Summary bars get the `gx-bar--summary` class
+- `GanttEx.I18n.labels/1` includes the `:locale`
+- `:calendar_days` icon
+
 ## 0.3.0 (2026-10-28)
 
 Charts of thousands of tasks edited by many people at once. Measured on a

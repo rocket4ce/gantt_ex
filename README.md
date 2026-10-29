@@ -26,6 +26,10 @@ These are the features of the DHTMLX Gantt community edition:
   restriction, open the detail, delete and your own actions
 - **Status indicators**: blocked tasks and open restrictions (Last Planner
   System) in the grid, the bars, tooltips and quick info
+- **Last Planner views**: a lookahead of the next weeks in the toolbar and
+  the weekly plan on the chart (the week highlighted, committed tasks in
+  green)
+- **Legend** of the colors and icons, and MS Project style **summary bars**
 - **Task types**: tasks, projects (dates rolled up from their children) and milestones
 - **Drag & drop**: move, resize and change progress, with snapping; reorder
   and re-parent rows
@@ -69,7 +73,7 @@ Add `gantt_ex` to your dependencies (Phoenix 1.8+, LiveView 1.2+):
 ```elixir
 def deps do
   [
-    {:gantt_ex, "~> 0.3.0"}
+    {:gantt_ex, "~> 0.4.0"}
   ]
 end
 ```
