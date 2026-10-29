@@ -1014,12 +1014,12 @@ msgstr "Lookahead"
 msgid "Not committed"
 msgstr "Não comprometida"
 
-#: lib/gantt_ex/i18n.ex:202
-#, elixir-autogen, elixir-format
-msgid "Weekly plan"
-msgstr "Plano semanal"
-
 #: lib/gantt_ex/i18n.ex:200
 #, elixir-autogen, elixir-format
 msgid "Whole schedule"
 msgstr "Todo o cronograma"
+
+#: lib/gantt_ex/i18n.ex:202
+#, elixir-autogen, elixir-format
+msgid "Planned period"
+msgstr "Período planeado"

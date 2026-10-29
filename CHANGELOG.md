@@ -11,8 +11,9 @@ Additions:
   of the current week. The timeline shows those weeks only, day by day, and
   the tasks overlapping them. Not in the default filters
 - `GanttEx.Filter.lookahead_range/3`
-- `:week_plan` attribute: the week is highlighted on the scale and the
-  chart, committed tasks are green and the other tasks muted
+- `:plans` attribute: the plans of one or more weeks (Last Planner). Their
+  periods are highlighted on the scale and the chart, the tasks committed
+  in any of them are green and the other tasks muted
 - `:legend` and `:legend_items` attributes: a legend of the colors and icons
   of the chart, with entries of the host
 - `:summary_bars` attribute: `:bracket` draws summary tasks as in MS Project.

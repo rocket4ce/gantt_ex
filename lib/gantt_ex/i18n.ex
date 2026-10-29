@@ -199,7 +199,7 @@ defmodule GanttEx.I18n do
         lookahead: gettext("Lookahead"),
         lookahead_off: gettext("Whole schedule"),
         # weekly plan and legend
-        week_plan: gettext("Weekly plan"),
+        plan_period: gettext("Planned period"),
         committed: gettext("Committed"),
         not_committed: gettext("Not committed"),
         legend: gettext("Legend"),

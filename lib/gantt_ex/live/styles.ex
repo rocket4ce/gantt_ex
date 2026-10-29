@@ -63,9 +63,9 @@ defmodule GanttEx.Live.Styles do
         --gx-radius: 6px;
         --gx-radius-lg: 12px;
         --gx-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-        /* weekly plan */
-        --gx-week: #14b8a6;
-        --gx-week-soft: rgba(20, 184, 166, 0.07);
+        /* plans */
+        --gx-plan: #14b8a6;
+        --gx-plan-soft: rgba(20, 184, 166, 0.07);
         --gx-committed: #bbf7d0;
         --gx-committed-progress: #4ade80;
         --gx-committed-border: #22c55e;
@@ -107,8 +107,8 @@ defmodule GanttEx.Live.Styles do
         --gx-success: #34d399;
         --gx-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
         --gx-shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.08);
-        --gx-week: #2dd4bf;
-        --gx-week-soft: rgba(45, 212, 191, 0.08);
+        --gx-plan: #2dd4bf;
+        --gx-plan-soft: rgba(45, 212, 191, 0.08);
         --gx-committed: #14532d;
         --gx-committed-progress: #16a34a;
         --gx-committed-border: #22c55e;
@@ -148,8 +148,8 @@ defmodule GanttEx.Live.Styles do
           --gx-success: #34d399;
           --gx-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
           --gx-shadow-lg: 0 24px 48px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(148, 163, 184, 0.08);
-          --gx-week: #2dd4bf;
-          --gx-week-soft: rgba(45, 212, 191, 0.08);
+          --gx-plan: #2dd4bf;
+          --gx-plan-soft: rgba(45, 212, 191, 0.08);
           --gx-committed: #14532d;
           --gx-committed-progress: #16a34a;
           --gx-committed-border: #22c55e;
@@ -2716,29 +2716,29 @@ defmodule GanttEx.Live.Styles do
         color: var(--gx-muted);
       }
 
-      /* ------------------------------------------------------- weekly plan */
+      /* -------------------------------------------------------------- plans */
       .gx-scale-band {
         position: absolute;
         top: 0;
         bottom: 0;
         z-index: 1;
-        background: var(--gx-week-soft);
-        border: 1.5px solid var(--gx-week);
+        background: var(--gx-plan-soft);
+        border: 1.5px solid var(--gx-plan);
         border-bottom: 0;
         border-radius: 6px 6px 0 0;
         pointer-events: none;
       }
 
-      .gx-week-band {
+      .gx-plan-band {
         position: absolute;
         top: 0;
         bottom: 0;
-        background: var(--gx-week-soft);
-        border-inline: 1.5px solid var(--gx-week);
+        background: var(--gx-plan-soft);
+        border-inline: 1.5px solid var(--gx-plan);
         pointer-events: none;
       }
 
-      .gx-week-band-label {
+      .gx-plan-band-label {
         position: sticky;
         top: calc(var(--gx-header-height, 64px) + 6px);
         z-index: 4;
@@ -2753,58 +2753,58 @@ defmodule GanttEx.Live.Styles do
         color: #ffffff;
         white-space: nowrap;
         text-overflow: ellipsis;
-        background: var(--gx-week);
+        background: var(--gx-plan);
         border-radius: 999px;
         box-shadow: var(--gx-shadow);
       }
 
-      .gx-root--week-plan .gx-bar--committed,
-      .gx-root--week-plan .gx-bar--not-committed {
+      .gx-root--plans .gx-bar--committed,
+      .gx-root--plans .gx-bar--not-committed {
         --gx-bar-text: var(--gx-plan-text);
       }
 
-      .gx-root--week-plan .gx-bar--committed {
+      .gx-root--plans .gx-bar--committed {
         --gx-plan-bg: var(--gx-committed);
         --gx-plan-progress: var(--gx-committed-progress);
         --gx-plan-border: var(--gx-committed-border);
         --gx-plan-text: var(--gx-committed-text);
       }
 
-      .gx-root--week-plan .gx-bar--not-committed {
+      .gx-root--plans .gx-bar--not-committed {
         --gx-plan-bg: var(--gx-not-committed);
         --gx-plan-progress: var(--gx-not-committed-progress);
         --gx-plan-border: var(--gx-not-committed-border);
         --gx-plan-text: var(--gx-not-committed-text);
       }
 
-      .gx-root--week-plan :is(.gx-bar--committed, .gx-bar--not-committed):not(.gx-bar--milestone)
+      .gx-root--plans :is(.gx-bar--committed, .gx-bar--not-committed):not(.gx-bar--milestone)
         .gx-bar-body {
         background: var(--gx-plan-bg);
         box-shadow: inset 0 0 0 1px var(--gx-plan-border), var(--gx-shadow);
       }
 
-      .gx-root--week-plan :is(.gx-bar--committed, .gx-bar--not-committed) .gx-bar-progress {
+      .gx-root--plans :is(.gx-bar--committed, .gx-bar--not-committed) .gx-bar-progress {
         background: var(--gx-plan-progress);
       }
 
-      .gx-root--week-plan :is(.gx-bar--committed, .gx-bar--not-committed) .gx-bar-text {
+      .gx-root--plans :is(.gx-bar--committed, .gx-bar--not-committed) .gx-bar-text {
         text-shadow: none;
       }
 
       /* the critical path stays visible as a red underline */
-      .gx-root--week-plan
+      .gx-root--plans
         :is(.gx-bar--committed, .gx-bar--not-committed).gx-bar--critical:not(.gx-bar--milestone)
         .gx-bar-body {
         box-shadow: inset 0 -3px 0 var(--gx-critical, #e11d48), inset 0 0 0 1px var(--gx-plan-border),
           var(--gx-shadow);
       }
 
-      .gx-root--week-plan .gx-bar--selected:is(.gx-bar--committed, .gx-bar--not-committed)
+      .gx-root--plans .gx-bar--selected:is(.gx-bar--committed, .gx-bar--not-committed)
         .gx-bar-body {
         box-shadow: 0 0 0 2px var(--gx-bg), 0 0 0 4px var(--gx-accent), 0 8px 18px -8px rgba(15, 23, 42, 0.5);
       }
 
-      .gx-root--week-plan .gx-bar--milestone.gx-bar--committed .gx-bar-body::before {
+      .gx-root--plans .gx-bar--milestone.gx-bar--committed .gx-bar-body::before {
         background: var(--gx-committed-progress);
         border-color: var(--gx-committed-border);
       }
@@ -3037,11 +3037,11 @@ defmodule GanttEx.Live.Styles do
         box-shadow: inset 0 0 0 1px var(--gx-not-committed-border);
       }
 
-      .gx-swatch--week {
+      .gx-swatch--plan {
         width: 18px;
         height: 14px;
-        background: var(--gx-week-soft);
-        border-inline: 1.5px solid var(--gx-week);
+        background: var(--gx-plan-soft);
+        border-inline: 1.5px solid var(--gx-plan);
         border-radius: 0;
       }
 
@@ -3137,7 +3137,7 @@ defmodule GanttEx.Live.Styles do
         .gx-bar-body,
         .gx-bar-progress,
         .gx-highlight,
-        .gx-week-band,
+        .gx-plan-band,
         .gx-scale-band,
         .gx-summary-cap,
         .gx-swatch,

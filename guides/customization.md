@@ -157,21 +157,25 @@ them, with their summary tasks. The value is part of the filter values
 (`%{lookahead: 3}`), so it is reported with `:filters_changed` and can be
 restored with `filter_values`.
 
-`week_plan` shows the commitments of a week:
+`plans` shows the commitments of plans of one week or more (such as the
+plans within the lookahead):
 
 ```heex
-week_plan={%{week: ~D[2025-03-03], committed: @committed_ids, label: "Week 10"}}
+plans={[
+  %{id: 1, week: ~D[2025-03-03], committed: @this_week, label: "Week 10"},
+  %{id: 2, week: ~D[2025-03-10], weeks: 2, committed: @next_weeks, label: "Weeks 11-12"}
+]}
 ```
 
-The week is highlighted on the scale and the chart, the bars of the committed
-tasks are green and the other tasks are muted (summary tasks and milestones
-keep their colors; critical tasks keep a red underline). The colors are
-custom properties:
+The period of each plan is highlighted on the scale and the chart, the bars
+of the tasks committed in any of them are green and the other tasks are
+muted (summary tasks and milestones keep their colors; critical tasks keep a
+red underline). The colors are custom properties:
 
 ```css
 .gx-root {
-  --gx-week: #14b8a6;
-  --gx-week-soft: rgba(20, 184, 166, 0.07);
+  --gx-plan: #14b8a6;
+  --gx-plan-soft: rgba(20, 184, 166, 0.07);
   --gx-committed: #bbf7d0;
   --gx-committed-progress: #4ade80;
   --gx-committed-border: #22c55e;

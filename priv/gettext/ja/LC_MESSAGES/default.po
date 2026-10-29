@@ -1002,12 +1002,12 @@ msgstr "ルックアヘッド"
 msgid "Not committed"
 msgstr "未確約"
 
-#: lib/gantt_ex/i18n.ex:202
-#, elixir-autogen, elixir-format
-msgid "Weekly plan"
-msgstr "週間計画"
-
 #: lib/gantt_ex/i18n.ex:200
 #, elixir-autogen, elixir-format
 msgid "Whole schedule"
 msgstr "全体スケジュール"
+
+#: lib/gantt_ex/i18n.ex:202
+#, elixir-autogen, elixir-format
+msgid "Planned period"
+msgstr "計画期間"

@@ -139,10 +139,12 @@ defmodule GanttEx.Live.Gantt do
     * `:today` - the current date, used by the "Today" button. Defaults to now.
     * `:markers` - vertical lines marking dates (see `GanttEx.Marker`).
     * `:today_marker` - add a marker for today. Defaults to `false`.
-    * `:week_plan` - the weekly plan (Last Planner) to show: `%{week: date,
-      committed: task_ids, label: "Week 45"}`. The week (any of its days) is
-      highlighted, the bars of the committed tasks are green and the other
-      tasks are muted. `nil` (the default) or `false` show the chart as usual.
+    * `:plans` - the plans (Last Planner) to show, each one of one week or
+      more: `[%{id: 1, week: date, weeks: 2, committed: task_ids, label:
+      "Weeks 45-46"}]`. `:week` is any day of its first week and `:weeks`
+      defaults to `1`. The period of each plan is highlighted, the bars of
+      the tasks committed in any of them are green and the other tasks are
+      muted. `[]` (the default), `nil` or `false` show the chart as usual.
 
   Appearance:
 
@@ -277,7 +279,7 @@ defmodule GanttEx.Live.Gantt do
     calendars: [],
     markers: [],
     today_marker: false,
-    week_plan: nil,
+    plans: [],
     summary_bars: :bar,
     legend: false,
     legend_items: [],
@@ -629,7 +631,7 @@ defmodule GanttEx.Live.Gantt do
     layout = layout(a, rows, timeline, bar_height)
     grid_width = grid_width(a, columns)
     chart_height = max(layout.height, 0)
-    week_plan = week_plan(a, timeline)
+    plans = plans(a, timeline)
 
     socket =
       if {timeline, a.labels_locale, a.store.calendar, a.weekend} == a[:scale_key] do
@@ -671,8 +673,8 @@ defmodule GanttEx.Live.Gantt do
         a.resource_panel && a.resources != [] &&
           ResourceLoad.compute(a.store, a.resources, timeline),
       marker_items: marker_items(a, timeline, today),
-      week_plan_view: week_plan,
-      legend_entries: a.legend && legend_entries(a, show_critical, week_plan),
+      plan_view: plans,
+      legend_entries: a.legend && legend_entries(a, show_critical, plans),
       root_style: root_style(a, columns, grid_width, bar_height, level),
       ctx: %{
         id: a.id,
@@ -986,7 +988,7 @@ defmodule GanttEx.Live.Gantt do
     Map.merge(bar, %{
       selected: MapSet.member?(a.selection, bar.key),
       summary: summary,
-      commitment: commitment(task, bar, a.week_plan_view),
+      commitment: commitment(task, bar, a.plan_view),
       drag: if(editable and not summary, do: "move", else: "none"),
       resizable: editable and not summary and task.type != :milestone,
       progress_editable: editable and task.type != :milestone,
@@ -1001,7 +1003,7 @@ defmodule GanttEx.Live.Gantt do
     })
   end
 
-  # Tasks in the weekly plan, and the other tasks (muted). Summary tasks and
+  # Tasks committed in the plans, and the other tasks (muted). Summary tasks and
   # milestones out of the plan keep their colors.
   defp commitment(_task, _bar, nil), do: nil
   defp commitment(_task, %{group: group}, _plan) when group not in [nil, false], do: nil
@@ -1015,46 +1017,56 @@ defmodule GanttEx.Live.Gantt do
     end
   end
 
-  # The week of the plan on the timeline (nil when there is no plan or when
-  # the week is out of the visible range).
-  defp week_plan(%{week_plan: plan}, _timeline) when plan in [nil, false], do: nil
+  # The periods of the plans on the timeline (their band is nil when out of
+  # the visible range) and the tasks committed in any of them. nil without
+  # plans.
+  defp plans(%{plans: plans}, _timeline) when plans in [nil, false, []], do: nil
 
-  defp week_plan(%{week_plan: plan} = a, timeline) do
-    plan = Map.new(plan)
+  defp plans(%{plans: plans} = a, timeline) do
+    periods = plans |> List.wrap() |> Enum.map(&plan_period(Map.new(&1), a, timeline))
 
-    from =
-      plan
-      |> Map.get(:week, Map.get(plan, "week"))
-      |> Dates.cast!()
-      |> Dates.floor(:week, week_start: a.week_start)
+    %{
+      periods: periods,
+      committed: Enum.reduce(periods, MapSet.new(), &MapSet.union(&2, &1.committed))
+    }
+  end
 
-    to = Dates.add(from, 7, :day)
-    committed = Map.get(plan, :committed, Map.get(plan, "committed")) || []
+  defp plan_period(plan, a, timeline) do
+    get = fn key -> Map.get(plan, key, Map.get(plan, Atom.to_string(key))) end
+    from = get.(:week) |> Dates.cast!() |> Dates.floor(:week, week_start: a.week_start)
+
+    weeks =
+      case get.(:weeks) do
+        weeks when is_integer(weeks) and weeks > 0 -> weeks
+        _ -> 1
+      end
+
+    to = Dates.add(from, 7 * weeks, :day)
     left = Timeline.x(timeline, Dates.max(from, timeline.start_date))
     right = Timeline.x(timeline, Dates.min(to, timeline.end_date))
 
     %{
+      key: Store.key(get.(:id) || Date.to_iso8601(NaiveDateTime.to_date(from))),
       from: from,
       to: to,
-      label: Map.get(plan, :label, Map.get(plan, "label")),
-      committed: MapSet.new(committed, &Store.key/1),
+      weeks: weeks,
+      label: get.(:label),
+      committed: MapSet.new(get.(:committed) || [], &Store.key/1),
       band: if(right > left, do: %{x: left, width: right - left})
     }
   end
 
   # What the legend explains: the bars and marks the chart can show, then the
   # entries of the host.
-  defp legend_entries(a, show_critical, week_plan) do
+  defp legend_entries(a, show_critical, plans) do
     labels = a.labels
 
     builtin = [
-      if(week_plan, do: %{key: "committed", label: labels.committed, kind: :committed}),
-      if(week_plan,
+      if(plans, do: %{key: "committed", label: labels.committed, kind: :committed}),
+      if(plans,
         do: %{key: "not-committed", label: labels.not_committed, kind: :not_committed}
       ),
-      if(week_plan,
-        do: %{key: "week-plan", label: week_plan.label || labels.week_plan, kind: :week}
-      ),
+      if(plans, do: %{key: "plan", label: labels.plan_period, kind: :plan}),
       %{key: "task", label: labels.task, kind: :task},
       %{key: "progress", label: labels.progress, kind: :progress},
       %{key: "project", label: labels.project, kind: {:summary, a.summary_bars}},
@@ -1264,7 +1276,7 @@ defmodule GanttEx.Live.Gantt do
         "gx-root",
         @summary_bars == :bracket && "gx-root--bracket",
         @filtering.lookahead && "gx-root--windowed",
-        @week_plan_view && "gx-root--week-plan",
+        @plan_view && "gx-root--plans",
         @class
       ]}
       style={@root_style}
@@ -1324,7 +1336,7 @@ defmodule GanttEx.Live.Gantt do
             <.scale
               rows={@scale_rows}
               width={@chart_width}
-              band={@week_plan_view && @week_plan_view.band}
+              bands={if(@plan_view, do: Enum.filter(@plan_view.periods, & &1.band), else: [])}
             />
           </div>
           <div class="gx-body">
@@ -1379,10 +1391,11 @@ defmodule GanttEx.Live.Gantt do
               data-gx-chart
             >
               <.highlights highlights={@highlights} />
-              <.week_band
-                :if={@week_plan_view && @week_plan_view.band}
+              <.plan_band
+                :for={period <- (@plan_view && @plan_view.periods) || []}
+                :if={period.band}
                 ctx={@ctx}
-                plan={@week_plan_view}
+                period={period}
               />
               <.markers ctx={@ctx} markers={@marker_items} />
               <.row_marks ctx={@ctx} bars={@window_bars} />

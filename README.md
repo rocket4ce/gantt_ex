@@ -27,7 +27,7 @@ These are the features of the DHTMLX Gantt community edition:
 - **Status indicators**: blocked tasks and open restrictions (Last Planner
   System) in the grid, the bars, tooltips and quick info
 - **Last Planner views**: a lookahead of the next weeks in the toolbar and
-  the weekly plan on the chart (the week highlighted, committed tasks in
+  the plans on the chart (their weeks highlighted, committed tasks in
   green)
 - **Legend** of the colors and icons, and MS Project style **summary bars**
 - **Task types**: tasks, projects (dates rolled up from their children) and milestones

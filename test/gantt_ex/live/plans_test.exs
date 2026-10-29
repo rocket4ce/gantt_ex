@@ -1,15 +1,15 @@
-defmodule GanttEx.Live.WeekPlanTest do
+defmodule GanttEx.Live.PlansTest do
   use GanttEx.LiveCase, async: true
 
-  @plan %{week: ~D[2025-01-08], committed: [2], label: "Week 2"}
+  @plan %{id: 7, week: ~D[2025-01-08], committed: [2], label: "Week 2"}
 
-  describe "weekly plan" do
-    test "highlights the week and colors the committed tasks", %{conn: conn} do
-      {:ok, view, _html} = mount_gantt(conn, week_plan: @plan)
+  describe "plans" do
+    test "highlight their period and color the committed tasks", %{conn: conn} do
+      {:ok, view, _html} = mount_gantt(conn, plans: [@plan])
 
-      assert has_element?(view, "#gantt.gx-root--week-plan")
+      assert has_element?(view, "#gantt.gx-root--plans")
       # the timeline starts on Jan 1 (48px per day): the week starts on Monday the 6th
-      assert has_element?(view, "#gantt-week-plan[style*='left: 240px; width: 336px']", "Week 2")
+      assert has_element?(view, "#gantt-plan-7[style*='left: 240px; width: 336px']", "Week 2")
       assert has_element?(view, ".gx-scale-band[style*='left: 240px']")
 
       assert has_element?(view, "#gantt-bar-2.gx-bar--committed")
@@ -19,17 +19,26 @@ defmodule GanttEx.Live.WeekPlanTest do
       refute has_element?(view, "#gantt-bar-4.gx-bar--not-committed")
     end
 
-    test "committed ids may be given as strings", %{conn: conn} do
-      {:ok, view, _html} = mount_gantt(conn, week_plan: %{week: "2025-01-06", committed: ["3"]})
+    test "may last several weeks, with the tasks committed in any of them", %{conn: conn} do
+      plans = [
+        %{week: "2025-01-06", committed: ["3"]},
+        %{id: "next", week: ~D[2025-01-13], weeks: 2, committed: [4], label: "Weeks 3-4"}
+      ]
 
+      {:ok, view, _html} = mount_gantt(conn, plans: plans)
+
+      assert has_element?(view, "#gantt-plan-2025-01-06", "Planned period")
+      # two weeks, cut at the end of the timeline (Jan 20)
+      assert has_element?(view, "#gantt-plan-next[style*='left: 576px']", "Weeks 3-4")
       assert has_element?(view, "#gantt-bar-3.gx-bar--committed")
-      assert has_element?(view, "#gantt-week-plan", "Weekly plan")
+      assert has_element?(view, "#gantt-bar-2.gx-bar--not-committed")
+      assert has_element?(view, "#gantt-bar-4.gx-bar--committed")
     end
 
-    test "is off by default", %{conn: conn} do
-      {:ok, view, _html} = mount_gantt(conn, week_plan: false)
+    test "are off by default", %{conn: conn} do
+      {:ok, view, _html} = mount_gantt(conn, plans: false)
 
-      refute has_element?(view, "#gantt-week-plan")
+      refute has_element?(view, ".gx-plan-band")
       refute has_element?(view, ".gx-bar--committed")
       refute has_element?(view, ".gx-bar--not-committed")
     end
@@ -57,7 +66,7 @@ defmodule GanttEx.Live.WeekPlanTest do
       {:ok, view, _html} =
         mount_gantt(conn,
           legend: true,
-          week_plan: @plan,
+          plans: [@plan],
           summary_bars: :bracket,
           baselines: true,
           legend_items: [
@@ -69,7 +78,7 @@ defmodule GanttEx.Live.WeekPlanTest do
 
       assert has_element?(view, "#gantt-legend-committed", "Committed")
       assert has_element?(view, "#gantt-legend-not-committed", "Not committed")
-      assert has_element?(view, "#gantt-legend-week-plan", "Week 2")
+      assert has_element?(view, "#gantt-legend-plan", "Planned period")
       assert has_element?(view, "#gantt-legend-project .gx-swatch--bracket")
       assert has_element?(view, "#gantt-legend-baseline")
 

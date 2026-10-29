@@ -1451,15 +1451,18 @@ defmodule GanttEx.Live.Components do
   @doc "Renders the time scale header."
   attr :rows, :list, required: true
   attr :width, :integer, required: true
-  attr :band, :map, default: nil, doc: "`%{x, width}`, the week of the weekly plan"
+
+  attr :bands, :list,
+    default: [],
+    doc: "the periods of the plans, with their `:band` (`%{x, width}`)"
 
   def scale(assigns) do
     ~H"""
     <div class="gx-scale" style={"width: #{@width}px"} aria-hidden="true">
       <div
-        :if={@band}
+        :for={period <- @bands}
         class="gx-scale-band"
-        style={"left: #{px(@band.x)}; width: #{px(@band.width)}"}
+        style={"left: #{px(period.band.x)}; width: #{px(period.band.width)}"}
       >
       </div>
       <div :for={cells <- @rows} class="gx-scale-row">
@@ -1776,21 +1779,21 @@ defmodule GanttEx.Live.Components do
   end
 
   @doc """
-  Renders the week of the weekly plan on the chart: `plan` has the `:band`
-  (`%{x, width}`) and the `:label` of the week.
+  Renders the period of a plan on the chart: `period` has the `:key`, the
+  `:band` (`%{x, width}`) and the `:label` of the plan.
   """
   attr :ctx, :map, required: true
-  attr :plan, :map, required: true
+  attr :period, :map, required: true
 
-  def week_band(assigns) do
+  def plan_band(assigns) do
     ~H"""
     <div
-      id={"#{@ctx.id}-week-plan"}
-      class="gx-week-band"
-      style={"left: #{px(@plan.band.x)}; width: #{px(@plan.band.width)}"}
-      title={@plan.label || @ctx.labels.week_plan}
+      id={"#{@ctx.id}-plan-#{dom_key(@period.key)}"}
+      class="gx-plan-band"
+      style={"left: #{px(@period.band.x)}; width: #{px(@period.band.width)}"}
+      title={@period.label || @ctx.labels.plan_period}
     >
-      <span class="gx-week-band-label">{@plan.label || @ctx.labels.week_plan}</span>
+      <span class="gx-plan-band-label">{@period.label || @ctx.labels.plan_period}</span>
     </div>
     """
   end
