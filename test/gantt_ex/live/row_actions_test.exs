@@ -201,6 +201,41 @@ defmodule GanttEx.Live.RowActionsTest do
     refute_received {:gantt_event, _event}
   end
 
+  test "actions may be offered to some tasks only", %{conn: conn} do
+    # Design (2) has some progress. Functions can't go in the session of
+    # the test LiveView: they are assigned once it's mounted.
+    unfinished = &(&1.progress == 0)
+    {:ok, view, _html} = mount_actions(conn)
+
+    send(
+      view.pid,
+      {:assign,
+       row_actions: [
+         %{id: :restriction, when: unfinished},
+         Map.put(@approve, :when, unfinished),
+         :detail
+       ]}
+    )
+
+    _ = :sys.get_state(view.pid)
+
+    refute has_element?(view, "#gantt-row-2-restriction")
+    refute has_element?(view, "#gantt-row-2-approve")
+    assert has_element?(view, "#gantt-row-2-detail")
+    assert has_element?(view, "#gantt-row-3-restriction[title='Add restriction']")
+    assert has_element?(view, "#gantt-row-3-approve")
+
+    # nor taken from the client for the other tasks
+    view
+    |> element("#gantt")
+    |> render_hook("row_action", %{"action" => "restriction", "key" => "2"})
+
+    refute_received {:gantt_event, %Event{type: :task_action}}
+
+    click(view, "#gantt-row-3-restriction")
+    assert_gantt_event(%Event{type: :task_action, action: :restriction})
+  end
+
   test "edit is hidden without lightbox", %{conn: conn} do
     {:ok, view, _html} = mount_actions(conn, lightbox: false)
 

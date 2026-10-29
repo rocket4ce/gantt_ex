@@ -1220,8 +1220,8 @@ defmodule GanttEx.Live.Components do
 
   # Actions that edit are hidden on read-only tasks
   defp action_shown?(%{editing: true}, task, ctx) when ctx.readonly or task.readonly, do: false
-  defp action_shown?(%{id: :edit, builtin: true}, _task, ctx), do: ctx.lightbox
-  defp action_shown?(_action, _task, _ctx), do: true
+  defp action_shown?(%{id: :edit, builtin: true}, _task, %{lightbox: false}), do: false
+  defp action_shown?(action, task, _ctx), do: GanttEx.Live.Columns.action_allowed?(action, task)
 
   attr :ctx, :map, required: true
   attr :row, :map, required: true

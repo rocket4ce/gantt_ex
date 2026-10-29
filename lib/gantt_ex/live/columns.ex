@@ -38,6 +38,11 @@ defmodule GanttEx.Live.Columns do
       reported as a `:task_action` event. `icon` is one of
       `GanttEx.Live.Icons.names/0`.
 
+  Any action may be given as a map with a `:when` function, which receives
+  the task and tells whether its row offers the action:
+  `%{id: :restriction, when: &(&1.progress < 1)}`. The action is ignored
+  for the other tasks, also when it comes from the client.
+
   Read-only charts drop the actions that edit (all of them but `:detail`
   and the custom ones). The column is as wide as its actions.
 
@@ -302,8 +307,19 @@ defmodule GanttEx.Live.Columns do
 
   defp action(id, labels) when is_map_key(@actions, id) do
     {icon, editing} = Map.fetch!(@actions, id)
-    %{id: id, icon: icon, label: action_label(id, labels), editing: editing, builtin: true}
+
+    %{
+      id: id,
+      icon: icon,
+      label: action_label(id, labels),
+      editing: editing,
+      builtin: true,
+      when: nil
+    }
   end
+
+  defp action(%{id: id} = action, labels) when is_map_key(@actions, id),
+    do: id |> action(labels) |> Map.put(:when, condition(action))
 
   defp action(%{id: id} = action, _labels) when is_atom(id) or is_binary(id) do
     icon = Map.get(action, :icon, :bolt)
@@ -319,7 +335,8 @@ defmodule GanttEx.Live.Columns do
       icon: icon,
       label: to_string(Map.get(action, :label) || id),
       editing: false,
-      builtin: false
+      builtin: false,
+      when: condition(action)
     }
   end
 
@@ -328,6 +345,26 @@ defmodule GanttEx.Live.Columns do
           "invalid row action #{inspect(other)}: expected one of " <>
             "#{inspect(Map.keys(@actions))} or a map with an :id, an :icon and a :label"
   end
+
+  defp condition(action) do
+    case Map.get(action, :when) do
+      nil ->
+        nil
+
+      fun when is_function(fun, 1) ->
+        fun
+
+      other ->
+        raise ArgumentError,
+              "invalid :when #{inspect(other)} for the action #{inspect(action.id)}, " <>
+                "expected a function receiving the task"
+    end
+  end
+
+  @doc "Whether the row of `task` offers `action` (its `:when` function)."
+  @spec action_allowed?(map(), GanttEx.Task.t()) :: boolean()
+  def action_allowed?(%{when: fun}, task) when is_function(fun, 1), do: fun.(task) == true
+  def action_allowed?(_action, _task), do: true
 
   defp action_label(:drag, labels), do: labels.drag_to_reorder
   defp action_label(:rename, labels), do: labels.rename

@@ -20,6 +20,8 @@ Additions:
   Summary bars get the `gx-bar--summary` class
 - `GanttEx.I18n.labels/1` includes the `:locale`
 - `:calendar_days` icon
+- Row actions take a `:when` function to be offered to some tasks only,
+  also for the built-in ones (`%{id: :restriction, when: &(&1.progress < 1)}`)
 
 ## 0.3.0 (2026-10-28)
 

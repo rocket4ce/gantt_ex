@@ -1638,9 +1638,16 @@ defmodule GanttEx.Live.Gantt do
   # -- events: row actions -----------------------------------------------------
 
   def handle_event("row_action", %{"action" => action, "key" => key}, socket) do
+    task = Store.task_by_key(socket.assigns.store, key)
+
     case find_action(socket.assigns.columns, action) do
-      nil -> {:noreply, socket}
-      action -> {:noreply, row_action(socket, action, key)}
+      %{} = action when task != nil ->
+        if Columns.action_allowed?(action, task),
+          do: {:noreply, row_action(socket, action, key)},
+          else: {:noreply, socket}
+
+      _ ->
+        {:noreply, socket}
     end
   end
 
