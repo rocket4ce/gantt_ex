@@ -1,6 +1,34 @@
 # Changelog
 
-## 0.4.0 (unreleased)
+## 0.4.1 (unreleased)
+
+Additions:
+
+- Row actions take a `:when` function to be offered to some tasks only,
+  also for the built-in ones (`%{id: :restriction, when: &(&1.progress < 1)}`)
+- `reveal: :always` on the `:actions` column shows the buttons on every row,
+  not only on hover
+- `GanttEx.Filter.task_status/3`: completed, overdue, in progress or not
+  started
+
+Changes:
+
+- The header of the `:actions` column shows its label
+- The `:progress` column shows a bar of the color of the status of the task
+  (completed, in progress, not started, overdue), explained by the legend
+  under a "Status" title
+- The tree column has its own width, which the user resizes like the
+  other columns: it grows with the free width of the grid but doesn't
+  shrink below it, so a narrow grid clips the columns on its right
+  instead of the task names
+- A lookahead fills the width of the viewport (its columns grow), and a
+  lookahead restored from the filter values switches to the `:day` zoom
+  level too. The label of the plans sits under the today marker
+- Selecting a task from the grid (a click on its row or keyboard
+  navigation) scrolls the chart to its bar when it is out of view, and a
+  click makes the bar pulse
+
+## 0.4.0 (2026-10-29)
 
 Last Planner views and a legend.
 
@@ -20,28 +48,6 @@ Additions:
   Summary bars get the `gx-bar--summary` class
 - `GanttEx.I18n.labels/1` includes the `:locale`
 - `:calendar_days` icon
-- Row actions take a `:when` function to be offered to some tasks only,
-  also for the built-in ones (`%{id: :restriction, when: &(&1.progress < 1)}`)
-- `reveal: :always` on the `:actions` column shows the buttons on every row,
-  not only on hover
-- `GanttEx.Filter.task_status/3`: completed, overdue, in progress or not
-  started
-
-Changes:
-
-- The header of the `:actions` column shows its label
-- The `:progress` column shows a bar of the color of the status of the task
-  (completed, in progress, not started, overdue), explained by the legend
-- A lookahead fills the width of the viewport (its columns grow), and a
-  lookahead restored from the filter values switches to the `:day` zoom
-  level too. The label of the plans sits under the today marker
-- The tree column has its own width, which the user resizes like the
-  other columns: it grows with the free width of the grid but doesn't
-  shrink below it, so a narrow grid clips the columns on its right
-  instead of the task names
-- Selecting a task from the grid (a click on its row or keyboard
-  navigation) scrolls the chart to its bar when it is out of view, and a
-  click makes the bar pulse
 
 ## 0.3.0 (2026-10-28)
 
