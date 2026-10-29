@@ -28,6 +28,10 @@ Additions:
 Changes:
 
 - The header of the `:actions` column shows its label
+- The tree column has its own width, which the user resizes like the
+  other columns: it grows with the free width of the grid but doesn't
+  shrink below it, so a narrow grid clips the columns on its right
+  instead of the task names
 
 ## 0.3.0 (2026-10-28)
 

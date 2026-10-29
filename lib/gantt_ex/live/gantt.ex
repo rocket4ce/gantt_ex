@@ -1239,7 +1239,6 @@ defmodule GanttEx.Live.Gantt do
     column_vars =
       columns
       |> Enum.with_index()
-      |> Enum.reject(fn {col, _} -> col.tree end)
       |> Enum.map_join(fn {col, index} -> "--gx-col-#{index}: #{col.width}px; " end)
 
     "--gx-row-height: #{a.row_height}px; --gx-bar-height: #{bar_height}px; " <>
@@ -2176,7 +2175,9 @@ defmodule GanttEx.Live.Gantt do
     end
   end
 
-  def handle_event("gx:resize", %{"column" => column, "width" => width}, socket) do
+  # `delta` is how much the column grew on the screen: the tree column may be
+  # wider than its width (it takes the free width of the grid)
+  def handle_event("gx:resize", %{"column" => column, "width" => width} = params, socket) do
     a = socket.assigns
 
     socket =
@@ -2191,18 +2192,19 @@ defmodule GanttEx.Live.Gantt do
           })
 
         {field, width} ->
-          case Enum.find(a.columns, &(&1.key == field and not &1.tree)) do
+          case Enum.find(a.columns, &(&1.key == field)) do
             nil ->
               socket
 
             col ->
-              width = width |> round() |> max(32) |> min(800)
+              width = width |> round() |> max(if(col.tree, do: 120, else: 32)) |> min(800)
+              delta = Interaction.number(params["delta"]) || width - col.width
 
               socket
               |> put_columns(%{
                 a.column_state
                 | widths: Map.put(a.column_state.widths, field, width),
-                  grid_width: resized_grid(a, width - col.width)
+                  grid_width: resized_grid(a, round(delta))
               })
           end
       end

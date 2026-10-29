@@ -201,4 +201,24 @@ defmodule GanttEx.Live.DragTest do
     hook(view, "gx:resize", %{"column" => "__grid", "width" => 500})
     assert render(view) =~ "--gx-grid-width: 500px"
   end
+
+  test "the tree column is resized too, from its width on the screen", %{conn: conn} do
+    {:ok, view, _html} = mount_gantt(conn)
+
+    # it has its own width (220px by default), and takes the free width
+    assert render(view) =~ "--gx-col-0: 220px"
+    assert has_element?(view, "#gantt-head-text[style*='flex: 1 0 var(--gx-col-0)']")
+    assert has_element?(view, "#gantt-head-text .gx-col-resizer[data-gx-min-width='120']")
+
+    hook(view, "gx:resize", %{"column" => "__grid", "width" => 900})
+
+    # shown 400px wide in a grid of 900px, widened by 50px: the grid grows with it
+    hook(view, "gx:resize", %{"column" => "text", "width" => 450, "delta" => 50})
+    assert render(view) =~ "--gx-col-0: 450px"
+    assert render(view) =~ "--gx-grid-width: 950px"
+
+    # never narrower than 120px
+    hook(view, "gx:resize", %{"column" => "text", "width" => 40, "delta" => -410})
+    assert render(view) =~ "--gx-col-0: 120px"
+  end
 end

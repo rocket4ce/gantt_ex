@@ -463,7 +463,14 @@ defmodule GanttEx.Live.Hook do
         resizeColumn(e, handle) {
           e.preventDefault()
           const column = handle.dataset.gxResizeColumn
-          const width0 = parseFloat(handle.dataset.gxWidth)
+          const cell = handle.closest("[role=columnheader]")
+          // a column starts from its width on the screen: the tree column may be
+          // wider than its own width, as it takes the free width of the grid
+          const width0 =
+            column === "__grid" || !cell
+              ? parseFloat(handle.dataset.gxWidth)
+              : cell.getBoundingClientRect().width
+          const min = parseFloat(handle.dataset.gxMinWidth || "32")
           const grid0 = px(this.el, "--gx-grid-width")
           const index = handle.dataset.gxColIndex
           let width = width0
@@ -475,13 +482,13 @@ defmodule GanttEx.Live.Hook do
                 width = clamp(width0 + dx, 120, 2000)
                 this.el.style.setProperty("--gx-grid-width", `${width}px`)
               } else {
-                width = clamp(width0 + dx, 32, 800)
+                width = clamp(width0 + dx, min, 800)
                 this.el.style.setProperty(`--gx-col-${index}`, `${width}px`)
                 this.el.style.setProperty("--gx-grid-width", `${grid0 + width - width0}px`)
               }
             },
             onEnd: (_dx, _dy, _ev, moved) => {
-              if (moved) this.push("gx:resize", {column, width})
+              if (moved) this.push("gx:resize", {column, width, delta: width - width0})
             }
           })
         },

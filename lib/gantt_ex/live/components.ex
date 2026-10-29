@@ -999,11 +999,11 @@ defmodule GanttEx.Live.Components do
             <span class="gx-truncate">{col.label}</span>
         <% end %>
         <span
-          :if={not col.tree}
           class="gx-col-resizer"
           data-gx-resize-column={col.field}
           data-gx-col-index={index}
           data-gx-width={col.width}
+          data-gx-min-width={if col.tree, do: 120, else: 32}
           aria-hidden="true"
         ></span>
       </div>
@@ -1028,9 +1028,10 @@ defmodule GanttEx.Live.Components do
 
   defp column_key(col), do: Map.get_lazy(col, :key, fn -> to_string(col.field) end)
 
-  # The tree column takes the free width but keeps a minimum: when the grid is
-  # narrowed, the columns on its right are clipped before the task names
-  defp column_style(%{tree: true}, _index), do: "flex: 1 1 0; min-width: 120px"
+  # The tree column takes the free width but keeps its own (which the user
+  # resizes): when the grid is narrowed, the columns on its right are
+  # clipped before the task names
+  defp column_style(%{tree: true}, index), do: "flex: 1 0 var(--gx-col-#{index}); min-width: 0"
   defp column_style(_col, index), do: "width: var(--gx-col-#{index}); flex: none"
 
   defp aria_sort({field, :asc}, %{field: field}), do: "ascending"

@@ -46,7 +46,7 @@ defmodule GanttEx.Live.ComponentsTest do
     assert hd(columns).label == "EDT"
   end
 
-  test "the tree column keeps a minimum width when the grid is narrowed" do
+  test "the tree column keeps its width when the grid is narrowed" do
     store = Store.new!([%{id: 1, text: "A", start_date: ~D[2025-01-01]}])
     [row] = Store.rows(store)
     columns = Columns.build([%{field: :text}, %{field: :start_date}], I18n.labels("en"))
@@ -58,8 +58,9 @@ defmodule GanttEx.Live.ComponentsTest do
         columns: columns
       )
 
-    # The other columns keep their width and are clipped by the grid first
-    assert html =~ "flex: 1 1 0; min-width: 120px"
+    # It grows with the free width but doesn't shrink: the other columns keep
+    # their width too and are clipped by the grid first
+    assert html =~ "flex: 1 0 var(--gx-col-0); min-width: 0"
     assert html =~ "width: var(--gx-col-1); flex: none"
   end
 end
